@@ -9,12 +9,15 @@ namespace PrimSystem.Services
         private readonly IDbContextFactory<AppDbContext> _factory;
         private readonly LoginThrottle _throttle;
         private readonly AuditService _audit;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(IDbContextFactory<AppDbContext> factory, LoginThrottle throttle, AuditService audit)
+        public AuthService(IDbContextFactory<AppDbContext> factory, LoginThrottle throttle,
+            AuditService audit, ILogger<AuthService> logger)
         {
             _factory = factory;
             _throttle = throttle;
             _audit = audit;
+            _logger = logger;
         }
 
         // Servis katmanı yetki kontrolü — UI guard'larına ek savunma hattı
@@ -33,8 +36,14 @@ namespace PrimSystem.Services
         {
             // Brute-force koruması — kilitliyse hemen reddet
             if (_throttle.GetLockRemaining(username) is { } remaining)
+            {
+                // AuditLogs.UserId FK'lı; kilit kontrolü kullanıcı çözülmeden önce olduğu için
+                // buraya audit yazılamaz. Güvenlik izi Serilog'a düşer.
+                _logger.LogWarning("Giriş reddedildi (kilitli): kullanıcı={Username} ip={Ip} kalan={Kalan}dk",
+                    username, ipAddress ?? "-", Math.Ceiling(remaining.TotalMinutes));
                 throw new LoginLockedException(
                     $"Çok fazla hatalı deneme. Lütfen {Math.Ceiling(remaining.TotalMinutes)} dakika sonra tekrar deneyin.");
+            }
 
             using var db = _factory.CreateDbContext();
             var user = await db.Users
@@ -42,8 +51,26 @@ namespace PrimSystem.Services
                 .Include(u => u.Region)
                 .FirstOrDefaultAsync(u => (u.Username == username || u.Email == username) && u.IsActive && !u.IsDeleted);
 
-            if (user == null) { _throttle.RegisterFailure(username); return null; }
-            if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) { _throttle.RegisterFailure(username); return null; }
+            // Bilinmeyen kullanıcı adı: AuditLogs.UserId FK'lı olduğundan denetim kaydı YAZILAMAZ
+            // (sahte bir UserId uydurmak yerine Serilog'a düşülüyor). Kullanıcı-adı sayımını
+            // (enumeration) kolaylaştırmamak için çağırana dönen sonuç yanlış-parola ile aynı.
+            if (user == null)
+            {
+                _throttle.RegisterFailure(username);
+                _logger.LogWarning("Başarısız giriş (kullanıcı yok): kullanıcı={Username} ip={Ip}",
+                    username, ipAddress ?? "-");
+                return null;
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            {
+                _throttle.RegisterFailure(username);
+                // Hedefli deneme — kullanıcı gerçek, parola yanlış. Güvenlik incelemesinde en
+                // değerli olay bu ve UserId elimizde olduğu için audit'e yazılabiliyor.
+                await _audit.LogAsync(user.UserId, "LoginFailed", "User", user.UserId,
+                    newValue: "Hatalı parola", ipAddress: ipAddress);
+                return null;
+            }
 
             _throttle.Reset(username);
 
@@ -67,6 +94,9 @@ namespace PrimSystem.Services
 
             user.ActiveSessionId = session.SessionId;
             await db.SaveChangesAsync();
+
+            await _audit.LogAsync(user.UserId, "Login", "User", user.UserId,
+                newValue: $"Oturum #{session.SessionId}", ipAddress: ipAddress);
 
             return user;
         }

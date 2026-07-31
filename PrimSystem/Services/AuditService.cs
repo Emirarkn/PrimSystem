@@ -14,8 +14,17 @@ namespace PrimSystem.Services
             _logger = logger;
         }
 
+        /// <summary>
+        /// Denetim kaydı yazar. Hata YUTULUR (loglanır) — audit yazımı asıl işlemi düşürmemeli.
+        /// </summary>
+        /// <param name="ipAddress">
+        /// İstemci IP'si. Blazor Server'da <c>IHttpContextAccessor</c> yalnız ilk sayfa isteğinde
+        /// geçerlidir; SignalR circuit içindeki etkileşimlerde HttpContext yoktur. Bu yüzden IP
+        /// otomatik türetilmez, çağıran taraf elinde varsa AÇIKÇA geçer (bkz. AuthService.LoginAsync).
+        /// Geçilmezse alan null kalır — yanıltıcı bir değer üretmektense boş bırakmak yeğdir.
+        /// </param>
         public async Task LogAsync(int userId, string action, string entityType, int? entityId = null,
-            string? oldValue = null, string? newValue = null)
+            string? oldValue = null, string? newValue = null, string? ipAddress = null)
         {
             try
             {
@@ -28,6 +37,7 @@ namespace PrimSystem.Services
                     EntityId   = entityId,
                     OldValue   = oldValue,
                     NewValue   = newValue,
+                    IpAddress  = ipAddress,
                     CreatedAt  = DateTime.UtcNow
                 });
                 await db.SaveChangesAsync();

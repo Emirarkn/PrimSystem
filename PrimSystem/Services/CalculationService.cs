@@ -655,6 +655,11 @@ namespace PrimSystem.Services
                 });
             }
 
+            // Üzerine yazılan önceki hesaplamanın özeti — denetim kaydı için. Bu çeyrek şu an
+            // versiyonlanmıyor, silinip yeniden yazılıyor; en azından NE ezildiği audit'e düşsün
+            // ("kim, ne zaman, hangi sonucu ezdi" sorusu cevaplanabilsin).
+            string? oncekiOzet = null;
+
             // Atomik kayıt: sil + ekle tek transaction'da
             using var tx = await db.Database.BeginTransactionAsync();
             try
@@ -663,6 +668,9 @@ namespace PrimSystem.Services
                     .Where(c => c.Year == year && c.Quarter == quarter).ToListAsync();
                 if (oldCalcs.Any())
                 {
+                    oncekiOzet = $"{oldCalcs.Count} ST · {oldCalcs.Count(c => c.IsPublished)} yayında · " +
+                                 $"{oldCalcs.Count(c => c.PassedGate)} gate geçti · " +
+                                 $"toplam {oldCalcs.Sum(c => c.PrimAmount ?? 0m):N2} TL";
                     var oldIds = oldCalcs.Select(c => c.CalcId).ToList();
                     var oldDetails = await db.CalculationDetails
                         .Where(d => oldIds.Contains(d.CalcId)).ToListAsync();
@@ -694,6 +702,14 @@ namespace PrimSystem.Services
             result.Success = true;
             result.STCount = stUsers.Count;
             result.PassedCount = result.STResults.Count(r => r.PassedGate && r.IsEligible);
+
+            // Prim tutarını değiştiren EN kritik işlem — audit'e yazılmadan geçilmemeli.
+            // oncekiOzet doluysa yayınlanmış/hesaplanmış bir sonuç ÜZERİNE yazıldı demektir.
+            await _audit.LogAsync(calculatedBy, "Calculate", "Calculation", null,
+                oldValue: oncekiOzet,
+                newValue: $"{year} {quarter}: {result.STCount} ST · {result.PassedCount} gate geçti · " +
+                          $"toplam {allCalcs.Sum(c => c.PrimAmount ?? 0m):N2} TL" +
+                          (runRate ? $" · run-rate {soldPeriods}/{periodIds.Count}" : ""));
 
             }
             catch (Exception ex)
