@@ -1,0 +1,204 @@
+@page "/photo-review"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject PhotoService Photos
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!_sessionChecked)
+{
+    @* oturum restore bekleniyor *@
+}
+else if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+}
+else if (!(Session.IsAdmin || Session.IsBM))
+{
+    <NotAuthorizedView />
+}
+else
+{
+    <div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+        <div style="max-width:1280px;margin:0 auto;padding:20px 24px">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+                <div>
+                    <div style="font-size:18px;font-weight:700;color:#f1f5f9">📷 Saha Fotoğrafı Kontrol</div>
+                    <div style="font-size:11px;color:#475569">
+                        @(Session.IsAdmin ? "Tüm ST fotoğrafları" : "Bölgenizdeki ST fotoğrafları") · onay / ret
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <select @bind="statusFilter" @bind:after="StateHasChanged"
+                            style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                        <option value="Pending">Bekleyenler</option>
+                        <option value="Approved">Onaylı</option>
+                        <option value="Rejected">Reddedilen</option>
+                        <option value="">Tümü</option>
+                    </select>
+                    <button @onclick="Load" disabled="@loading"
+                            style="padding:6px 12px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        @(loading ? "⏳ Yükleniyor..." : "🔄 Yenile")
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">✓ @message</div>
+            }
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#ef4444;font-size:13px">⚠ @error</div>
+            }
+
+            @if (loading)
+            {
+                <div style="text-align:center;padding:60px;color:#64748b;font-size:13px">Yükleniyor...</div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div style="text-align:center;padding:60px">
+                    <div style="font-size:32px;margin-bottom:12px">📷</div>
+                    <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Fotoğraf yok</div>
+                    <div style="font-size:12px;color:#64748b">Seçili filtre için kayıt bulunamadı.</div>
+                </div>
+            }
+            else
+            {
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+                    @foreach (var p in Filtered)
+                    {
+                        var (bg, fg, label) = StatusStyle(p.Status);
+                        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden;display:flex;flex-direction:column">
+                            <div style="position:relative;background:#0a0f1a;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;cursor:pointer"
+                                 @onclick="() => OpenLightbox(p.Id)">
+                                @if (thumbs.TryGetValue(p.Id, out var src))
+                                {
+                                    <img src="@src" style="width:100%;height:100%;object-fit:cover" alt="@p.Title" />
+                                }
+                                else
+                                {
+                                    <span style="color:#475569;font-size:12px">görsel yükleniyor…</span>
+                                }
+                                <span style="position:absolute;top:8px;right:8px;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:@bg;color:@fg;border:1px solid @(fg)44">@label</span>
+                            </div>
+                            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:6px;flex:1">
+                                <div style="font-size:13px;font-weight:700;color:#f1f5f9">@p.Title</div>
+                                @if (!string.IsNullOrEmpty(p.Purpose))
+                                {
+                                    <div style="font-size:11px;color:#94a3b8">@p.Purpose</div>
+                                }
+                                <div style="font-size:10px;color:#475569">@p.UploaderName · @p.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+                                @if (p.Status != "Pending" && !string.IsNullOrEmpty(p.ReviewNote))
+                                {
+                                    <div style="font-size:11px;color:@fg">Not: @p.ReviewNote</div>
+                                }
+                                <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+                                    <input @bind="notes[p.Id]" placeholder="Not (opsiyonel)"
+                                           style="width:100%;background:#0a0f1a;color:#f1f5f9;border:1px solid #1e293b;border-radius:7px;padding:6px 10px;font-size:11px;box-sizing:border-box" />
+                                    <div style="display:flex;gap:6px">
+                                        <button @onclick="() => Review(p.Id, true)" disabled="@busy"
+                                                style="flex:1;padding:6px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">✓ Onayla</button>
+                                        <button @onclick="() => Review(p.Id, false)" disabled="@busy"
+                                                style="flex:1;padding:6px;background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">✕ Reddet</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (lightboxSrc != null)
+    {
+        <div style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:30px"
+             @onclick="() => lightboxSrc = null">
+            <img src="@lightboxSrc" style="max-width:95vw;max-height:90vh;border-radius:10px;box-shadow:0 24px 64px rgba(0,0,0,0.7)" />
+        </div>
+    }
+}
+
+@code {
+    private bool _sessionChecked;
+    private bool loading = true;
+    private bool busy;
+    private string statusFilter = "Pending";
+    private string? message;
+    private string? error;
+    private List<StPhotoListItem> photos = new();
+    private readonly Dictionary<int, string> thumbs = new();
+    private readonly Dictionary<int, string> notes = new();
+    private string? lightboxSrc;
+
+    private IEnumerable<StPhotoListItem> Filtered =>
+        string.IsNullOrEmpty(statusFilter) ? photos : photos.Where(p => p.Status == statusFilter);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (!Session.IsLoggedIn) { Nav.NavigateTo("/login"); return; }
+            if (Session.IsAdmin || Session.IsBM) await Load();
+            StateHasChanged();
+        }
+    }
+
+    private async Task Load()
+    {
+        if (Session.CurrentUser == null) return;
+        loading = true; message = null; error = null; StateHasChanged();
+        try
+        {
+            photos = await Photos.GetForReviewAsync(Session.CurrentUser.UserId);
+            thumbs.Clear();
+            foreach (var p in photos)
+            {
+                if (!notes.ContainsKey(p.Id)) notes[p.Id] = ""; // @bind indexer'ı için anahtar şart
+                var img = await Photos.GetImageAsync(p.Id, Session.CurrentUser.UserId);
+                if (img != null)
+                    thumbs[p.Id] = $"data:{img.Value.ContentType};base64,{Convert.ToBase64String(img.Value.Data)}";
+            }
+        }
+        catch (Exception ex) { error = "Yüklenemedi: " + ex.Message; }
+        finally { loading = false; StateHasChanged(); }
+    }
+
+    private void OpenLightbox(int id)
+    {
+        if (thumbs.TryGetValue(id, out var src)) lightboxSrc = src;
+    }
+
+    private async Task Review(int photoId, bool approve)
+    {
+        if (busy || Session.CurrentUser == null) return;
+        busy = true; message = null; error = null; StateHasChanged();
+        try
+        {
+            notes.TryGetValue(photoId, out var note);
+            var (ok, err) = await Photos.ReviewAsync(photoId, Session.CurrentUser.UserId, approve, note);
+            if (ok)
+            {
+                message = approve ? "Fotoğraf onaylandı." : "Fotoğraf reddedildi.";
+                await Load();
+            }
+            else { error = err; }
+        }
+        finally { busy = false; StateHasChanged(); }
+    }
+
+    private static (string Bg, string Fg, string Label) StatusStyle(string status) => status switch
+    {
+        "Approved" => ("rgba(16,185,129,0.12)", "#10b981", "Onaylı"),
+        "Rejected" => ("rgba(239,68,68,0.1)",  "#f87171", "Reddedildi"),
+        _          => ("rgba(245,158,11,0.12)", "#f59e0b", "Bekliyor")
+    };
+}

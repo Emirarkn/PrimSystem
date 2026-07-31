@@ -1,0 +1,972 @@
+﻿@page "/"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using PrimSystem.Components.Shared
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ProtectedSessionStorage SessionStorage
+@inject CalculationService CalcSvc
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+@if (!_sessionChecked)
+{
+    @* Session henüz restore edilmedi — boş bekle *@
+}
+else if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+}
+else
+{
+    <div style="min-height:100vh;background:#080e1a;font-family:Segoe UI,sans-serif">
+
+    <!-- DASHBOARD CONTENT -->
+    <div style="max-width:1280px;margin:0 auto;padding:28px 24px">
+
+        @if (!string.IsNullOrEmpty(loadError))
+        {
+            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;color:#f87171;font-size:13px">⚠ @loadError</div>
+        }
+
+        <!-- BADGE SATIRLARI — yıldız/aktif-ST/portföy: org geneli + sipariş verisi.
+             ST/BM yalnız admin sipariş sıralaması paylaştığında (orderShared) görür. -->
+        @if (Session.CanViewAll || orderShared)
+        {
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.08em">Performans Göstergeleri</div>
+            @if (publishedYear > 0)
+            {
+                <button @onclick="() => showLeaderboard = true"
+                        style="padding:8px 18px;background:linear-gradient(135deg,rgba(245,158,11,0.22),rgba(249,115,22,0.16));color:#fbbf24;border:1px solid rgba(245,158,11,0.4);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;box-shadow:0 2px 12px rgba(245,158,11,0.15)">
+                    🏆 Performans Sıralaması
+                    <span style="font-size:10px;color:#92400e;font-weight:600">@publishedQuarter @publishedYear</span>
+                </button>
+            }
+        </div>
+        <div class="card3d-scene" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:22px">
+
+            <!-- Haftanın Yıldızı — En Fazla Sipariş Hacmi -->
+            <div class="card3d" style="background:linear-gradient(135deg,rgba(6,182,212,0.12),rgba(59,130,246,0.07));border:1px solid rgba(6,182,212,0.25);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden">
+                <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;background:radial-gradient(circle,rgba(6,182,212,0.25),transparent);pointer-events:none"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                    <div style="font-size:9px;font-weight:800;color:#06b6d4;text-transform:uppercase;letter-spacing:0.1em">⭐ Haftanın Yıldızı</div>
+                    <div style="display:flex;gap:4px">
+                        <button @onclick="RefreshStars" disabled="@starsRefreshing" style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);border-radius:5px;color:#06b6d4;font-size:10px;padding:2px 7px;cursor:pointer;line-height:1.4" title="Veriyi Yenile">@(starsRefreshing ? "⏳" : "▶ Çalıştır")</button>
+                        @if (Session.CanManage)
+                        {
+                            <button @onclick="() => showStarCriteriaPopup = true" style="background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.3);border-radius:5px;color:#06b6d4;font-size:11px;padding:2px 7px;cursor:pointer;line-height:1.4" title="Seçim Kriterlerini Düzenle">⚙</button>
+                        }
+                    </div>
+                </div>
+                @if (volumeStar != null)
+                {
+                    <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:2px">@volumeStar.FullName</div>
+                    <div style="font-size:11px;color:#64748b;margin-bottom:8px">@volumeStar.Region · @volumeStar.Period</div>
+                    <div style="font-size:13px;font-weight:700;color:#06b6d4">📦 @volumeStar.Value.ToString("N0") @volumeStar.MetricLabel</div>
+                }
+                else
+                {
+                    <div style="font-size:13px;color:#475569;font-style:italic">Sipariş verisi bulunamadı</div>
+                }
+            </div>
+
+            <!-- Ayın Yıldızı — En Fazla Kurum Erişimi -->
+            <div class="card3d" style="background:linear-gradient(135deg,rgba(139,92,246,0.14),rgba(99,102,241,0.07));border:1px solid rgba(139,92,246,0.3);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden">
+                <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;background:radial-gradient(circle,rgba(139,92,246,0.25),transparent);pointer-events:none"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                    <div style="font-size:9px;font-weight:800;color:#a78bfa;text-transform:uppercase;letter-spacing:0.1em">🏆 Ayın Yıldızı</div>
+                    <div style="display:flex;gap:4px">
+                        <button @onclick="RefreshStars" disabled="@starsRefreshing" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);border-radius:5px;color:#a78bfa;font-size:10px;padding:2px 7px;cursor:pointer;line-height:1.4" title="Veriyi Yenile">@(starsRefreshing ? "⏳" : "▶ Çalıştır")</button>
+                        @if (Session.CanManage)
+                        {
+                            <button @onclick="() => showStarCriteriaPopup = true" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);border-radius:5px;color:#a78bfa;font-size:11px;padding:2px 7px;cursor:pointer;line-height:1.4" title="Seçim Kriterlerini Düzenle">⚙</button>
+                        }
+                    </div>
+                </div>
+                @if (reachStar != null)
+                {
+                    <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:2px">@reachStar.FullName</div>
+                    <div style="font-size:11px;color:#64748b;margin-bottom:8px">@reachStar.Region · @reachStar.Period</div>
+                    <div style="font-size:13px;font-weight:700;color:#a78bfa">🏛 @reachStar.Value.ToString("N0") @reachStar.MetricLabel</div>
+                }
+                else
+                {
+                    <div style="font-size:13px;color:#475569;font-style:italic">Sipariş verisi bulunamadı</div>
+                }
+            </div>
+
+            <!-- Stat: Aktif ST -->
+            <div class="card3d" style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.05));border:1px solid rgba(16,185,129,0.2);border-radius:14px;padding:16px 18px">
+                <div style="font-size:9px;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">👥 Aktif ST</div>
+                <div class="depth" style="font-size:32px;font-weight:800;color:#10b981;line-height:1">@stCount</div>
+                <div style="font-size:11px;color:#64748b;margin-top:4px">@regionCount bölge</div>
+            </div>
+
+            <!-- Stat: Ürün / Brick -->
+            <div class="card3d" style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(217,119,6,0.05));border:1px solid rgba(245,158,11,0.2);border-radius:14px;padding:16px 18px">
+                <div style="font-size:9px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">📦 Portföy</div>
+                <div class="depth" style="font-size:32px;font-weight:800;color:#f59e0b;line-height:1">@primProductCount</div>
+                <div style="font-size:11px;color:#64748b;margin-top:4px">prim ürünü · @brickCount brick</div>
+            </div>
+        </div>
+        }
+
+
+            <!-- ADMİN ANALİTİK DASHBOARD -->
+            @if (Session.IsAdmin && publishedSummaries.Any())
+            {
+                var allEligible = publishedSummaries.Where(s => s.Calc.IsEligible).ToList();
+                var allPassed   = allEligible.Count(s => salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate);
+                var allFailed   = allEligible.Count - allPassed;
+                var allIneligible = publishedSummaries.Count(s => !s.Calc.IsEligible);
+                var avgScore    = allEligible.Any() ? allEligible.Average(s => (double)(salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore))) * 100 : 0;
+                var passRate    = allEligible.Any() ? (double)allPassed / allEligible.Count * 100 : 0;
+
+                <div style="margin-bottom:16px">
+                    <CalcFreshnessBanner Year="publishedYear" Quarter="@publishedQuarter" Freshness="freshness" />
+                    @if (isDraftView)
+                    {
+                        <div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:10px 14px;margin-bottom:12px;color:#f59e0b;font-size:12px;font-weight:600">
+                            ⏸ Yayın durdurulmuş — taslak görünüm (@publishedQuarter @publishedYear, yalnızca siz görüyorsunuz; ST'lere kapalı)
+                        </div>
+                    }
+                    <!-- Stat Kartları -->
+                    <div class="card3d-scene" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+                        <div class="card3d" style="background:rgba(17,24,39,0.9);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:16px">
+                            <div style="font-size:9px;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">✅ Geçen</div>
+                            <div class="depth" style="font-size:30px;font-weight:900;color:#10b981;line-height:1">@allPassed</div>
+                            <div style="font-size:10px;color:#475569;margin-top:3px">/ @allEligible.Count uygun ST</div>
+                        </div>
+                        <div class="card3d" style="background:rgba(17,24,39,0.9);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:16px">
+                            <div style="font-size:9px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">❌ Kalan</div>
+                            <div class="depth" style="font-size:30px;font-weight:900;color:#ef4444;line-height:1">@allFailed</div>
+                            <div style="font-size:10px;color:#475569;margin-top:3px">prim alamadı</div>
+                        </div>
+                        <div class="card3d" style="background:rgba(17,24,39,0.9);border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:16px">
+                            <div style="font-size:9px;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">📊 Geçiş Oranı</div>
+                            <div class="depth" style="font-size:30px;font-weight:900;color:#6366f1;line-height:1">%@(passRate.ToString("F0"))</div>
+                            <div style="font-size:10px;color:#475569;margin-top:3px">uygun ST'lerde</div>
+                        </div>
+                        <div class="card3d" style="background:rgba(17,24,39,0.9);border:1px solid rgba(245,158,11,0.2);border-radius:12px;padding:16px">
+                            <div style="font-size:9px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">⭐ Ort. Skor</div>
+                            <div class="depth" style="font-size:30px;font-weight:900;color:#f59e0b;line-height:1">%@(avgScore.ToString("F1"))</div>
+                            <div style="font-size:10px;color:#475569;margin-top:3px">@allIneligible prim dışı</div>
+                        </div>
+                    </div>
+                    <!-- Chartlar -->
+                    <div class="card3d-scene" style="display:grid;grid-template-columns:@(salesOnlyMode ? "1fr" : "1fr 1fr");gap:12px">
+                        <div class="card3d" style="background:rgba(17,24,39,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:18px">
+                            <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">@(salesOnlyMode ? "🏅 Top 10 ST — Satış Skoru" : "🏅 Top 10 ST — Final Skor")</div>
+                            <canvas id="adminTopChart" style="max-height:260px"></canvas>
+                        </div>
+                        @if (!salesOnlyMode)
+                        {
+                            <div class="card3d" style="background:rgba(17,24,39,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:18px">
+                                <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">🗺 Bölge Karşılaştırması</div>
+                                <IsoBarChart Items="@regionAnalytics.Select(r => new IsoBarChart.Item(r.RegionName, (decimal)Math.Round(r.AvgFinalScore * 100, 1), r.PassRate >= 0.7 ? "#6366f1" : "#f59e0b")).ToList()"
+                                             MaxValue="100" ValueSuffix="%" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- LEADERBOARD MODAL — tüm roller -->
+            <LeaderboardModal Show="showLeaderboard"
+                              Year="@publishedYear"
+                              Quarter="@publishedQuarter"
+                              ProductId="@(activeOrderLeaderboard?.ProductId)"
+                              ProductName="@(activeOrderLeaderboard?.Product?.Name)"
+                              CurrentUserId="@(Session.CurrentUser?.UserId ?? 0)"
+                              OnClose="EventCallback.Factory.Create(this, () => showLeaderboard = false)" />
+
+            <!-- SİPARİŞ LEADERBOARD PANEL — aktif yayın varsa tüm roller görür -->
+            @if (activeOrderLeaderboard != null)
+            {
+                <OrderLeaderboardPanel Publish="activeOrderLeaderboard" CurrentUserId="Session.CurrentUser?.UserId" />
+            }
+
+            <!-- YÖNETİCİ (KANAL MÜDÜRÜ) — TÜRKİYE TEPEDEN GÖRÜNÜM -->
+            @if (Session.IsYonetici && publishedSummaries.Any())
+            {
+                var trReal = trHedef > 0 ? trGerc / trHedef : 0m;
+                var trRealColor = trReal >= 1.0m ? "#10b981" : trReal >= 0.85m ? "#f59e0b" : "#ef4444";
+                <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:16px">
+
+                    <!-- Türkiye hedef vs gerçekleşen + toplam TL (units/TL toggle) -->
+                    <div class="card3d depth" style="background:linear-gradient(135deg,rgba(17,24,39,0.95),rgba(30,41,59,0.6));border:1px solid rgba(99,102,241,0.18);border-radius:16px;padding:20px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em">🇹🇷 Türkiye Toplam Sell-Out · @publishedQuarter @publishedYear</div>
+                            <div style="display:flex;gap:4px;background:#0a0f1a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:3px">
+                                <button @onclick='() => bmMetricMode = "units"'
+                                        style="padding:4px 12px;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:@(bmMetricMode == "units" ? "rgba(99,102,241,0.25)" : "transparent");color:@(bmMetricMode == "units" ? "#a5b4fc" : "#64748b")">📦 Adet</button>
+                                <button @onclick='() => bmMetricMode = "tl"'
+                                        style="padding:4px 12px;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:@(bmMetricMode == "tl" ? "rgba(16,185,129,0.25)" : "transparent");color:@(bmMetricMode == "tl" ? "#6ee7b7" : "#64748b")">₺ TL</button>
+                            </div>
+                        </div>
+                        @if (bmMetricMode == "units")
+                        {
+                            <div style="display:flex;align-items:flex-end;gap:16px">
+                                <div>
+                                    <div style="font-size:10px;color:#64748b;margin-bottom:2px">HEDEF</div>
+                                    <div style="font-size:26px;font-weight:900;font-family:monospace;color:#94a3b8;line-height:1.1">@trHedef.ToString("N0")</div>
+                                </div>
+                                <div style="font-size:20px;color:#475569;padding-bottom:4px">→</div>
+                                <div>
+                                    <div style="font-size:10px;color:#64748b;margin-bottom:2px">GERÇEKLEŞEN</div>
+                                    <div style="font-size:30px;font-weight:900;font-family:monospace;color:#a5b4fc;line-height:1.1">@trGerc.ToString("N0")</div>
+                                </div>
+                                <div style="padding-bottom:4px">
+                                    <span style="font-size:18px;font-weight:900;font-family:monospace;color:@trRealColor">%@((trReal * 100).ToString("F1"))</span>
+                                    <div style="font-size:10px;color:#64748b">realizasyon</div>
+                                </div>
+                            </div>
+                            <div style="font-size:11px;color:#64748b;margin-top:8px">📦 kutu (adet) · ST-atanmış brick'lerden: <span style="color:#cbd5e1;font-family:monospace">@trAssignedUnits.ToString("N0")</span></div>
+                        }
+                        else
+                        {
+                            <div style="font-size:36px;font-weight:900;font-family:monospace;color:#6ee7b7;line-height:1.1">@trTL.ToString("N0") ₺</div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px">toplam satış tutarı · hedef TL tanımlı değil</div>
+                            <div style="font-size:11px;color:#64748b;margin-top:8px">₺ ST-atanmış brick'lerden: <span style="color:#6ee7b7;font-family:monospace">@trAssignedTL.ToString("N0") ₺</span></div>
+                        }
+                        <div style="display:flex;gap:18px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
+                            <div>
+                                <div style="font-size:20px;font-weight:800;color:#f1f5f9;font-family:monospace">@regionSummary.Count</div>
+                                <div style="font-size:10px;color:#64748b">bölge</div>
+                            </div>
+                            <div>
+                                <div style="font-size:20px;font-weight:800;color:#f1f5f9;font-family:monospace">@publishedSummaries.Count</div>
+                                <div style="font-size:10px;color:#64748b">ST</div>
+                            </div>
+                            <div>
+                                <div style="font-size:20px;font-weight:800;color:#fbbf24;font-family:monospace">@publishedSummaries.Sum(s => s.Calc.PrimAmount ?? 0).ToString("N0") ₺</div>
+                                <div style="font-size:10px;color:#64748b">toplam prim</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:14px">
+                            <button @onclick='() => Nav.NavigateTo("/overview")'
+                                    style="padding:8px 16px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">
+                                🌐 Overview → (Bölge · ST · Ürün detayı)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Türkiye realizasyon gauge -->
+                    <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Türkiye Realizasyonu</div>
+                        <ScoreGauge Value="@(Math.Min(trReal, 1.05m))" Size="150"
+                                    StatusText="@($"%{(trReal * 100):F0} gerç./hedef")"
+                                    ColorOverride="@trRealColor" />
+                    </div>
+                </div>
+
+                <!-- Bölge-Bölge karşılaştırması (gerçekleşen) -->
+                @if (regionSummary.Any())
+                {
+                    <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px;margin-bottom:16px">
+                        <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:6px">🗺 Bölge Karşılaştırması — Gerçekleşen (@(bmMetricMode == "tl" ? "TL" : "kutu"))</div>
+                        <IsoBarChart Items="regionBars" ValueSuffix="" ChartHeight="150" />
+                    </div>
+                }
+
+                <div style="background:rgba(17,24,39,0.8);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:22px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <div>
+                            <div style="font-size:16px;font-weight:700;color:#f1f5f9">📊 Prim Sonuçları — BM Kırılımı</div>
+                            <div style="font-size:11px;color:#475569;margin-top:2px">@publishedQuarter @publishedYear · @publishedSummaries.Count ST</div>
+                        </div>
+                        <button @onclick="() => showLeaderboard = true"
+                                style="padding:8px 16px;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(249,115,22,0.15));color:#fbbf24;border:1px solid rgba(245,158,11,0.35);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">
+                            🏆 Sıralama
+                        </button>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead>
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
+                                <th style="padding:8px 12px;text-align:left;color:#475569;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">BM</th>
+                                <th style="padding:8px 12px;text-align:left;color:#475569;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">BÖLGE</th>
+                                <th style="padding:8px 12px;text-align:center;color:#475569;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">ST</th>
+                                <th style="padding:8px 12px;text-align:center;color:#475569;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">ORT. PUAN</th>
+                                <th style="padding:8px 12px;text-align:center;color:#475569;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">GEÇEN / KALAN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var bm in dashboardBMs)
+                            {
+                                var bmSTs = publishedSummaries.Where(s => s.Calc.User?.ManagerId == bm.UserId && s.Calc.IsEligible).ToList();
+                                if (!bmSTs.Any()) continue;
+                                var bmAvg = bmSTs.Average(s => (double)(salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore)));
+                                var bmPassed = bmSTs.Count(s => salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate);
+                                var bmColor = bmAvg >= 0.85 ? "#10b981" : "#ef4444";
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+                                    <td style="padding:9px 12px;font-weight:600;color:#f1f5f9">@bm.FullName</td>
+                                    <td style="padding:9px 12px;color:#64748b">@bm.Region?.Name</td>
+                                    <td style="padding:9px 12px;text-align:center;color:#94a3b8;font-weight:600">@bmSTs.Count</td>
+                                    <td style="padding:9px 12px;text-align:center">
+                                        <span style="font-family:monospace;font-weight:700;font-size:13px;color:@bmColor">%@((bmAvg * 100).ToString("F1"))</span>
+                                    </td>
+                                    <td style="padding:9px 12px;text-align:center;display:flex;justify-content:center;gap:6px">
+                                        <span style="padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.25)">✓ @bmPassed</span>
+                                        @if (bmSTs.Count - bmPassed > 0)
+                                        {
+                                            <span style="padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25)">✗ @(bmSTs.Count - bmPassed)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
+                        <button @onclick='() => Nav.NavigateTo("/reports")' style="padding:8px 16px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">📊 Raporlar</button>
+                        <button @onclick='() => Nav.NavigateTo("/calculate")' style="padding:8px 16px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.25);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Tüm Detaylar →</button>
+                    </div>
+                </div>
+            }
+
+            <!-- BM DASHBOARD -->
+            @if (Session.IsBM && publishedSummaries.Any())
+            {
+                var myRegion = Session.CurrentUser?.Region?.Name ?? "";
+                var eligible = publishedSummaries.Where(s => s.Calc.IsEligible).ToList();
+                var passed = eligible.Count(s => salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate);
+                var passRate = eligible.Any() ? (double)passed / eligible.Count * 100 : 0;
+                var bmFailed = eligible.Count - passed;
+                var bmAvg = publishedSummaries.Any() ? publishedSummaries.Average(s => salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore)) : 0m;
+                var bmPrim = publishedSummaries.Sum(s => s.Calc.PrimAmount ?? 0);
+                var bmTopUnits = publishedSummaries
+                    .Select(s => new IsoBarChart.Item(s.Calc.User?.FullName ?? "?", s.Details.Sum(d => d.ActualQty),
+                        ((salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate) && s.Calc.IsEligible) ? "#10b981" : "#6366f1"))
+                    .OrderByDescending(i => i.Value).Take(8).ToList();
+
+                <!-- BM İNFOGRAFİK ŞERİT (units/TL geçişi) -->
+                <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:16px">
+                    <div class="card3d depth" style="background:linear-gradient(135deg,rgba(17,24,39,0.95),rgba(30,41,59,0.6));border:1px solid rgba(99,102,241,0.18);border-radius:16px;padding:20px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em">📍 @myRegion · Toplam Satış</div>
+                            <div style="display:flex;gap:4px;background:#0a0f1a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:3px">
+                                <button @onclick='() => bmMetricMode = "units"' style="padding:4px 12px;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:@(bmMetricMode == "units" ? "rgba(99,102,241,0.25)" : "transparent");color:@(bmMetricMode == "units" ? "#a5b4fc" : "#64748b")">📦 Units</button>
+                                <button @onclick='() => bmMetricMode = "tl"' style="padding:4px 12px;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:@(bmMetricMode == "tl" ? "rgba(16,185,129,0.25)" : "transparent");color:@(bmMetricMode == "tl" ? "#6ee7b7" : "#64748b")">₺ TL</button>
+                            </div>
+                        </div>
+                        @if (bmMetricMode == "units")
+                        {
+                            <div style="font-size:36px;font-weight:900;font-family:monospace;color:#a5b4fc;line-height:1.1">@bmRegionUnits.ToString("N0")</div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px">kutu · satılan toplam birim</div>
+                        }
+                        else
+                        {
+                            <div style="font-size:36px;font-weight:900;font-family:monospace;color:#6ee7b7;line-height:1.1">@bmRegionTL.ToString("N0") ₺</div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px">toplam satış tutarı</div>
+                        }
+                        <div style="display:flex;gap:18px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
+                            <div><div style="font-size:19px;font-weight:800;color:#f1f5f9;font-family:monospace">@publishedSummaries.Count</div><div style="font-size:10px;color:#64748b">ST</div></div>
+                            <div><div style="font-size:19px;font-weight:800;color:#10b981;font-family:monospace">@passed</div><div style="font-size:10px;color:#64748b">geçen</div></div>
+                            <div><div style="font-size:19px;font-weight:800;color:#ef4444;font-family:monospace">@bmFailed</div><div style="font-size:10px;color:#64748b">kalan</div></div>
+                            <div><div style="font-size:19px;font-weight:800;color:#fbbf24;font-family:monospace">@bmPrim.ToString("N0") ₺</div><div style="font-size:10px;color:#64748b">toplam prim</div></div>
+                        </div>
+                    </div>
+                    <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:18px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Bölge Ortalaması</div>
+                        <ScoreGauge Value="bmAvg" Size="140" StatusText="@($"%{passRate:F0} geçiş")"
+                                    ColorOverride="@(bmAvg >= 0.85m ? "#10b981" : bmAvg >= 0.70m ? "#f59e0b" : "#ef4444")" />
+                    </div>
+                </div>
+                <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px;margin-bottom:16px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                        <div style="font-size:13px;font-weight:700;color:#f1f5f9">🏅 En İyi ST'ler — Satış (kutu)</div>
+                        <button @onclick='() => Nav.NavigateTo("/bolgem")' style="padding:6px 14px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.3);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📊 Bölge Analizi →</button>
+                    </div>
+                    <IsoBarChart Items="bmTopUnits" ChartHeight="130" />
+                </div>
+
+                <div style="background:rgba(17,24,39,0.8);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:22px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <div>
+                            <div style="font-size:16px;font-weight:700;color:#f1f5f9">📍 @myRegion</div>
+                            <div style="font-size:11px;color:#475569;margin-top:2px">@publishedQuarter @publishedYear · Geçiş oranı <span style="color:@(passRate >= 70 ? "#10b981" : "#f59e0b");font-weight:700">%@(passRate.ToString("F0"))</span></div>
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            @if (orderShared)
+                            {
+                                <button @onclick="() => showLeaderboard = true"
+                                        style="padding:8px 14px;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(249,115,22,0.15));color:#fbbf24;border:1px solid rgba(245,158,11,0.35);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">
+                                    🏆 Sıralama
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:@(salesOnlyMode ? "1fr" : "1fr auto");gap:16px;align-items:start">
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            @{int bmRank = 0;}
+                            @foreach (var s in publishedSummaries.OrderByDescending(x => salesOnlyMode ? x.Calc.TotalScore : (x.Calc.FinalScore ?? x.Calc.TotalScore)))
+                            {
+                                bmRank++;
+                                var stPassed = salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate;
+                                var score = (salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore)) * 100;
+                                var accentColor = !s.Calc.IsEligible ? "#f59e0b" : stPassed ? "#10b981" : "#ef4444";
+                                var rankIcon = bmRank == 1 ? "🥇" : bmRank == 2 ? "🥈" : bmRank == 3 ? "🥉" : $"{bmRank}.";
+                                <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#0a0f1a;border:1px solid @(accentColor)22;border-radius:10px">
+                                    <span style="font-size:@(bmRank <= 3 ? "18px" : "12px");font-weight:700;color:#64748b;width:24px;text-align:center;flex-shrink:0">@rankIcon</span>
+                                    <span style="flex:1;font-size:13px;font-weight:600;color:#f1f5f9">@s.Calc.User?.FullName</span>
+                                    <div style="height:4px;width:80px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+                                        <div style="height:100%;width:@(Math.Min(score,100).ToString("F0"))%;background:@accentColor;border-radius:2px"></div>
+                                    </div>
+                                    <span style="font-size:11px;color:@accentColor;font-weight:700;min-width:52px;text-align:right">@(s.Calc.IsEligible ? (stPassed ? "GEÇTİ ✓" : "KALDI ✗") : "Prim Dışı")</span>
+                                    <span style="font-size:17px;font-weight:800;font-family:monospace;color:@accentColor;min-width:62px;text-align:right">%@(score.ToString("F1"))</span>
+                                </div>
+                            }
+                        </div>
+                        <!-- BM Radar Chart -->
+                        @if (!salesOnlyMode)
+                        {
+                            <div style="width:240px;background:rgba(10,15,26,0.7);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px">
+                                <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;text-align:center">KPI Ortalama</div>
+                                <canvas id="bmRadarChart" style="max-height:200px"></canvas>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- ST DASHBOARD — kendi skoru -->
+            @if (Session.IsST)
+            {
+                @if (publishedSummaries.Any())
+                {
+                    var mySummary = publishedSummaries.FirstOrDefault();
+                    if (mySummary != null)
+                    {
+                        var passed = (salesOnlyMode ? mySummary.Calc.TotalScore >= 0.85m : mySummary.Calc.PassedGate) && mySummary.Calc.IsEligible;
+                        var accentColor = !mySummary.Calc.IsEligible ? "#f59e0b" : passed ? "#10b981" : "#ef4444";
+                        var bgGradient = !mySummary.Calc.IsEligible
+                            ? "rgba(245,158,11,0.08),rgba(217,119,6,0.04)"
+                            : passed
+                                ? "rgba(16,185,129,0.1),rgba(5,150,105,0.04)"
+                                : "rgba(239,68,68,0.1),rgba(220,38,38,0.04)";
+                        <div style="background:linear-gradient(135deg,@bgGradient);border:1px solid @(accentColor)40;border-radius:16px;padding:28px;position:relative;overflow:hidden">
+                            <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:radial-gradient(circle,@(accentColor)18,transparent);pointer-events:none"></div>
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:20px;flex-wrap:wrap">
+                                <div style="flex:1;min-width:200px">
+                                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+                                        <span style="font-size:12px;color:#64748b">@publishedQuarter @publishedYear · Son Yayınlanan Dönem</span>
+                                        @if (orderShared)
+                                        {
+                                            <button @onclick="() => showLeaderboard = true"
+                                                    style="padding:4px 10px;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(249,115,22,0.15));color:#fbbf24;border:1px solid rgba(245,158,11,0.35);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">
+                                                🏆 Sıralama
+                                            </button>
+                                        }
+                                    </div>
+                                    <div style="font-size:15px;font-weight:800;color:@accentColor;letter-spacing:0.02em;margin-bottom:16px">
+                                        @if (!mySummary.Calc.IsEligible) { @mySummary.Calc.IneligibleReason }
+                                        else { @(passed ? "✅ GEÇTİ" : "❌ KALDI") }
+                                    </div>
+                                    <KpiBreakdownBars SalesScore="@mySummary.Calc.TotalScore"
+                                                      DistScore="@mySummary.Calc.DistScore"
+                                                      RutaScore="@mySummary.Calc.RutaScore"
+                                                      OrderScore="@mySummary.Calc.OrderScore"
+                                                      SalesOnly="salesOnlyMode" />
+                                </div>
+                                <div style="text-align:center">
+                                    <ScoreGauge Value="@(salesOnlyMode ? mySummary.Calc.TotalScore : (mySummary.Calc.FinalScore ?? mySummary.Calc.TotalScore))" Size="150"
+                                                ColorOverride="@(!mySummary.Calc.IsEligible ? accentColor : null)"
+                                                StatusText="@(!mySummary.Calc.IsEligible ? "PRİM DIŞI" : null)" />
+                                    <div style="font-size:11px;color:@accentColor;opacity:0.6;margin-top:4px">@(salesOnlyMode ? "REALİZASYON (Satış/Hedef) · gate %85" : "FİNAL SKOR · gate %85")</div>
+                                </div>
+                            </div>
+
+                            <!-- Prim Tutarı (yalnız satış modunda gizli — prim final skora göre hesaplanır) -->
+                            @if (!salesOnlyMode)
+                            {
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;margin-bottom:20px;background:@(passed && mySummary.Calc.PrimAmount > 0 ? "linear-gradient(135deg,rgba(16,185,129,0.14),rgba(5,150,105,0.06))" : "rgba(255,255,255,0.03)");border:1px solid @(passed && mySummary.Calc.PrimAmount > 0 ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.08)");border-radius:12px">
+                                    <div style="display:flex;align-items:center;gap:10px">
+                                        <span style="font-size:22px">💰</span>
+                                        <div>
+                                            <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Hak Edilen Prim</div>
+                                            <div style="font-size:11px;color:#475569">@publishedQuarter @publishedYear dönemi</div>
+                                        </div>
+                                    </div>
+                                    <div style="text-align:right">
+                                        @if (mySummary.Calc.PrimAmount.HasValue && mySummary.Calc.PrimAmount.Value > 0)
+                                        {
+                                            <div style="font-size:28px;font-weight:900;font-family:monospace;color:#10b981;line-height:1">@mySummary.Calc.PrimAmount.Value.ToString("N2") ₺</div>
+                                        }
+                                        else
+                                        {
+                                            <div style="font-size:18px;font-weight:700;color:#64748b">Prim yok</div>
+                                            <div style="font-size:11px;color:#475569;margin-top:2px">@(!mySummary.Calc.IsEligible ? "Prim dışı dönem" : !passed ? "Eşik aşılamadı" : "Tanımlı kademe yok")</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (mySummary.Details.Any())
+                            {
+                                <div style="margin-bottom:16px">
+                                    <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">Ürün Detayı</div>
+                                    <div style="display:flex;flex-direction:column;gap:4px">
+                                        @foreach (var d in mySummary.Details)
+                                        {
+                                            var ratePct = d.TargetQty > 0 ? d.Rate * 100 : 0;
+                                            var rateColor = d.TargetQty == 0 ? "#64748b" : d.Rate >= 0.85m ? "#10b981" : "#ef4444";
+                                            <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;background:#0a0f1a;border-radius:7px">
+                                                <span style="font-size:12px;color:#f1f5f9;font-weight:500">@d.Product?.Name</span>
+                                                <div style="display:flex;gap:16px;font-size:11px;font-family:monospace">
+                                                    <span style="color:#64748b">Hdf: @(d.TargetQty > 0 ? d.TargetQty.ToString("F0") : "—")</span>
+                                                    <span style="color:#f1f5f9">Grc: @(d.ActualQty > 0 ? d.ActualQty.ToString("F0") : "—")</span>
+                                                    <span style="color:@rateColor;font-weight:600">@(d.TargetQty > 0 ? $"%{ratePct:F1}" : "—") @(d.IsCapped ? "↑" : "")</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!salesOnlyMode)
+                            {
+                            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+                                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                                    @if (mySummary.Calc.RutaScore.HasValue)
+                                    {
+                                        var rutaColor = mySummary.Calc.RutaScore >= 0.85m ? "#10b981" : "#ef4444";
+                                        <div style="padding:10px 16px;background:#0a0f1a;border-radius:8px;text-align:center;min-width:90px">
+                                            <div style="font-size:10px;color:#64748b;margin-bottom:2px">Ruta Uyum</div>
+                                            <div style="font-size:18px;font-weight:700;font-family:monospace;color:@rutaColor">%@((mySummary.Calc.RutaScore.Value * 100).ToString("F0"))</div>
+                                        </div>
+                                    }
+                                    @if (mySummary.Calc.DistScore.HasValue)
+                                    {
+                                        var distColor = mySummary.Calc.DistScore >= 0.85m ? "#10b981" : "#ef4444";
+                                        <div style="padding:10px 16px;background:#0a0f1a;border-radius:8px;text-align:center;min-width:90px">
+                                            <div style="font-size:10px;color:#64748b;margin-bottom:2px">Dağıtım</div>
+                                            <div style="font-size:18px;font-weight:700;font-family:monospace;color:@distColor">%@((mySummary.Calc.DistScore.Value * 100).ToString("F0"))</div>
+                                        </div>
+                                    }
+                                    @if (mySummary.Calc.OrderScore.HasValue)
+                                    {
+                                        var strikeColor = mySummary.Calc.OrderScore >= 0.85m ? "#10b981" : "#ef4444";
+                                        <div style="padding:10px 16px;background:#0a0f1a;border-radius:8px;text-align:center;min-width:90px">
+                                            <div style="font-size:10px;color:#64748b;margin-bottom:2px">Strike Rate</div>
+                                            <div style="font-size:18px;font-weight:700;font-family:monospace;color:@strikeColor">%@((mySummary.Calc.OrderScore.Value * 100).ToString("F0"))</div>
+                                        </div>
+                                    }
+                                </div>
+                                @if (orderShared && myOrderSummary != null)
+                                {
+                                    <div style="margin-top:12px">
+                                        <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">Sipariş Özeti</div>
+                                        <div style="display:flex;gap:10px;flex-wrap:wrap">
+                                            <div style="padding:10px 16px;background:#0a0f1a;border:1px solid rgba(6,182,212,0.2);border-radius:8px;text-align:center;min-width:90px">
+                                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">Sipariş Kutu</div>
+                                                <div style="font-size:18px;font-weight:700;font-family:monospace;color:#06b6d4">@myOrderSummary.Value.BoxQty.ToString("N0")</div>
+                                            </div>
+                                            <div style="padding:10px 16px;background:#0a0f1a;border:1px solid rgba(16,185,129,0.2);border-radius:8px;text-align:center;min-width:90px">
+                                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">Sipariş TL</div>
+                                                <div style="font-size:18px;font-weight:700;font-family:monospace;color:#10b981">@myOrderSummary.Value.AmountTL.ToString("N0")</div>
+                                            </div>
+                                            <div style="padding:10px 16px;background:#0a0f1a;border:1px solid rgba(139,92,246,0.2);border-radius:8px;text-align:center;min-width:90px">
+                                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">Sipariş Kurum</div>
+                                                <div style="font-size:18px;font-weight:700;font-family:monospace;color:#a78bfa">@myOrderSummary.Value.InstCount</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                <!-- ST KPI Radar Chart -->
+                                <div style="background:rgba(10,15,26,0.7);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px;min-width:220px">
+                                    <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;text-align:center">KPI Dağılımınız</div>
+                                    <canvas id="stRadarChart" style="max-height:200px"></canvas>
+                                </div>
+                            </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:32px;text-align:center">
+                        <div style="font-size:28px;margin-bottom:10px">📊</div>
+                        <div style="font-size:14px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Henüz Yayınlanan Sonuç Yok</div>
+                        <div style="font-size:12px;color:#64748b">Prim sonuçlarınız yayınlandığında burada görünecek.</div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+<!-- Yıldız Kriterleri Konfigürasyon Popup -->
+@if (showStarCriteriaPopup)
+{
+    <div style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center"
+         @onclick="() => showStarCriteriaPopup = false">
+        <div style="background:#111827;border:1px solid #334155;border-radius:16px;padding:28px;width:420px;max-width:95vw;box-shadow:0 24px 60px rgba(0,0,0,0.6)"
+             @onclick:stopPropagation>
+            <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:6px">⚙ Yıldız Seçim Kriterleri</div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:20px">Her yıldız için sıralama metriğini seçin.</div>
+
+            <div style="margin-bottom:16px">
+                <label style="font-size:11px;font-weight:600;color:#94a3b8;display:block;margin-bottom:6px">⭐ Haftanın Yıldızı Metriği</label>
+                <select @bind="editWeekMetric" style="width:100%;background:#0a0f1a;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px">
+                    <option value="BoxQuantity">Toplam Kutu (Sipariş Hacmi)</option>
+                    <option value="InstitutionCount">Kurum Adedi (Erişim)</option>
+                    <option value="AmountTL">Ana Mal TL</option>
+                    <option value="MFTL">MF TL</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:24px">
+                <label style="font-size:11px;font-weight:600;color:#94a3b8;display:block;margin-bottom:6px">🏆 Ayın Yıldızı Metriği</label>
+                <select @bind="editMonthMetric" style="width:100%;background:#0a0f1a;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px">
+                    <option value="BoxQuantity">Toplam Kutu (Sipariş Hacmi)</option>
+                    <option value="InstitutionCount">Kurum Adedi (Erişim)</option>
+                    <option value="AmountTL">Ana Mal TL</option>
+                    <option value="MFTL">MF TL</option>
+                </select>
+            </div>
+
+            @if (!string.IsNullOrEmpty(starCriteriaMsg))
+            {
+                <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:7px;padding:8px 12px;margin-bottom:12px;color:#10b981;font-size:12px">@starCriteriaMsg</div>
+            }
+
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+                <button @onclick="() => showStarCriteriaPopup = false"
+                        style="padding:8px 18px;background:rgba(148,163,184,0.08);color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+                    İptal
+                </button>
+                <button @onclick="SaveStarCriteria" disabled="@starCriteriaSaving"
+                        style="padding:8px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+                    @(starCriteriaSaving ? "Kaydediliyor..." : "Kaydet")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool showLeaderboard = false;
+    private int productCount, primProductCount, stCount, brickCount, regionCount;
+    private string? loadError;
+    private List<CalcSummary> publishedSummaries = new();
+    private List<User> dashboardBMs = new();
+    private int publishedYear;
+    private string publishedQuarter = "";
+    private CalculationService.StarBadge? volumeStar;
+    private CalculationService.StarBadge? reachStar;
+    private OrderLeaderboardPublish? activeOrderLeaderboard;
+
+    // Yıldız yenileme
+    private bool starsRefreshing = false;
+
+    // Yıldız kriterleri popup
+    private bool showStarCriteriaPopup = false;
+    private bool starCriteriaSaving = false;
+    private string starCriteriaMsg = "";
+    private string editWeekMetric = "BoxQuantity";
+    private string editMonthMetric = "InstitutionCount";
+    private List<RegionAnalyticsRow> regionAnalytics = new();
+    private (decimal BoxQty, decimal AmountTL, int InstCount)? myOrderSummary;
+    private bool _chartsRendered = false;
+    private bool _dataLoaded = false;
+    private bool isDraftView = false; // yayın durdurulmuşken admin'in gördüğü taslak pano
+    private CalcFreshness? freshness; // admin: brick ataması bayat / yayınlanmamış uyarısı
+    private bool salesOnlyMode = false; // global "yalnız satış skoru" görüntüleme modu (admin ayarı)
+    private decimal bmRegionUnits, bmRegionTL; // BM infografik: bölge toplam sell-out (kutu / TL)
+    private string bmMetricMode = "units"; // BM/Yönetici ana ekran units/TL geçişi
+
+    // Yönetici (Kanal Müdürü) — Türkiye tepeden görünüm
+    private List<RegionSummaryRow> regionSummary = new();
+    private decimal trUnits, trTL, trAssignedUnits, trAssignedTL, trHedef, trGerc;
+
+    // Bölge karşılaştırma barları (gerçekleşen; toggle'a göre kutu/TL; realizasyona göre renk)
+    private List<IsoBarChart.Item> regionBars => regionSummary
+        .Select(r =>
+        {
+            var real = r.Hedef > 0 ? r.Gerceklesen / r.Hedef : 0m;
+            var color = real >= 1.0m ? "#10b981" : real >= 0.85m ? "#f59e0b" : "#6366f1";
+            return new IsoBarChart.Item(r.Name, bmMetricMode == "tl" ? r.GerceklesenTL : r.Gerceklesen, color);
+        })
+        .OrderByDescending(x => x.Value)
+        .Take(10)
+        .ToList();
+
+    // Sipariş verisi yalnız admin sıralama paylaştığında (veya üst yönetimde) görünür.
+    private bool orderShared => Session.CanViewAll || activeOrderLeaderboard != null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            productCount = await db.Products.CountAsync(p => p.IsActive);
+            primProductCount = await db.Products.CountAsync(p => p.IsActive && p.IsPrimEligible);
+            stCount = await db.Users.CountAsync(u => u.RoleId == RoleId.ST && u.IsActive && !u.IsDeleted);
+            brickCount = await db.Bricks.CountAsync(b => b.IsActive);
+            regionCount = await db.Regions.CountAsync(r => r.IsActive);
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Veri yüklenirken hata: {ex.Message}";
+        }
+    }
+
+    private async Task LoadPublishedDashboard()
+    {
+        if (!Session.IsLoggedIn) return;
+        salesOnlyMode = await CalcSvc.GetSalesOnlyModeAsync();
+        (volumeStar, reachStar) = await CalcSvc.GetOrderBadgesAsync();
+        activeOrderLeaderboard = await CalcSvc.GetActiveOrderLeaderboardAsync();
+
+        // Leaderboard modal için son yayın dönemini her rol için yükle
+        var latestPub = await CalcSvc.GetLatestPublishedAsync();
+
+        // Admin: yayın durdurulmuş/kaldırılmışsa en son HESAPLANAN döneme düş (taslak görünüm).
+        // ST/BM davranışı değişmez — yayın yoksa pano görmemeleri doğru.
+        isDraftView = false;
+        if (latestPub == null && Session.IsAdmin)
+        {
+            latestPub = await CalcSvc.GetLatestCalculatedAsync();
+            isDraftView = latestPub != null;
+        }
+
+        if (latestPub != null)
+        {
+            publishedYear = latestPub.Value.Year;
+            publishedQuarter = latestPub.Value.Quarter;
+        }
+
+        if (latestPub == null) return;
+        try
+        {
+            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
+            publishedSummaries = await CalcSvc.GetResultsAsync(publishedYear, publishedQuarter, regionFilter, publishedOnly: !isDraftView, specificUserId: userFilter);
+
+            // Admin: brick ataması son hesaplamadan sonra değişti mi / yayınlanmamış mı bandı.
+            freshness = Session.IsAdmin ? await CalcSvc.GetCalcFreshnessAsync(publishedYear, publishedQuarter) : null;
+
+            if (Session.IsBM && Session.CurrentUser?.RegionId != null)
+            {
+                var bmTotals = await CalcSvc.GetRegionSalesTotalsAsync(publishedYear, publishedQuarter, Session.CurrentUser.RegionId);
+                bmRegionUnits = bmTotals.Units;
+                bmRegionTL = bmTotals.AmountTL;
+            }
+
+            if (Session.IsAdmin || Session.IsYonetici)
+            {
+                regionAnalytics = await CalcSvc.GetRegionAnalyticsAsync(publishedYear, publishedQuarter);
+            }
+
+            if (Session.IsYonetici)
+            {
+                // Türkiye geneli (tüm bölgeler) sell-out toplamı — genel + ST-atanmış brick.
+                var trTotals = await CalcSvc.GetRegionSalesTotalsAsync(publishedYear, publishedQuarter, null);
+                trUnits = trTotals.Units; trTL = trTotals.AmountTL;
+                var trAssigned = await CalcSvc.GetRegionSalesTotalsAsync(publishedYear, publishedQuarter, null, null, assignedOnly: true);
+                trAssignedUnits = trAssigned.Units; trAssignedTL = trAssigned.AmountTL;
+                // Bölge bazında hedef/gerçekleşen (aynı atıf yolu) — hedef vs gerçekleşen ile realizasyon.
+                regionSummary = await CalcSvc.GetRegionSummaryAsync(publishedYear, publishedQuarter, null, null);
+                trHedef = regionSummary.Sum(r => r.Hedef);
+                trGerc = regionSummary.Sum(r => r.Gerceklesen);
+
+                using var db = DbFactory.CreateDbContext();
+                dashboardBMs = await db.Users.Include(u => u.Region)
+                    .Where(u => u.RoleId == 3 && u.IsActive && !u.IsDeleted)
+                    .ToListAsync();
+            }
+
+            if (Session.IsST && Session.CurrentUser != null)
+            {
+                var orderSummaries = await CalcSvc.GetOrderSummariesAsync(publishedYear, publishedQuarter);
+                if (orderSummaries.TryGetValue(Session.CurrentUser.UserId, out var myOrd))
+                    myOrderSummary = myOrd;
+            }
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Dashboard yüklenirken hata: {ex.Message}";
+        }
+        _dataLoaded = true;
+    }
+
+    private bool _sessionChecked = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (!Session.IsLoggedIn)
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+            await LoadPublishedDashboard();
+            StateHasChanged();
+        }
+
+        if (!firstRender && _dataLoaded && !_chartsRendered)
+        {
+            _chartsRendered = true;
+            await RenderChartsAsync();
+        }
+    }
+
+    private async Task RenderChartsAsync()
+    {
+        try
+        {
+            // Admin: top 10 bar + bölge karşılaştırma
+            if (Session.IsAdmin && publishedSummaries.Any())
+            {
+                var top10 = publishedSummaries
+                    .Where(s => s.Calc.IsEligible)
+                    .OrderByDescending(s => salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore))
+                    .Take(10).ToList();
+
+                if (top10.Any())
+                {
+                    await JS.InvokeVoidAsync("renderChart", "adminTopChart", new
+                    {
+                        type = "bar",
+                        data = new
+                        {
+                            labels = top10.Select(s => s.Calc.User?.FullName ?? "").ToArray(),
+                            datasets = new[] { new
+                            {
+                                label = salesOnlyMode ? "Satış Skoru %" : "Final Skor %",
+                                data = top10.Select(s => Math.Round((double)(salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore)) * 100, 1)).ToArray(),
+                                backgroundColor = top10.Select(s => (salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate) ? "rgba(16,185,129,0.75)" : "rgba(239,68,68,0.65)").ToArray(),
+                                borderRadius = 4
+                            }}
+                        },
+                        options = new
+                        {
+                            indexAxis = "y",
+                            responsive = true,
+                            plugins = new { legend = new { display = false } },
+                            scales = new
+                            {
+                                x = new { max = 100, grid = new { color = "rgba(255,255,255,0.05)" }, ticks = new { color = "#64748b", font = new { size = 10 } } },
+                                y = new { grid = new { display = false }, ticks = new { color = "#e2e8f0", font = new { size = 10 } } }
+                            }
+                        }
+                    });
+                }
+
+                // Bölge karşılaştırması artık IsoBarChart (saf CSS 3D) ile render ediliyor — JS gerekmez
+            }
+
+            // BM: radar (bölge KPI ortalamaları) — yalnız satış modunda gizli
+            if (Session.IsBM && !salesOnlyMode && publishedSummaries.Any())
+            {
+                var eligible = publishedSummaries.Where(s => s.Calc.IsEligible).ToList();
+                if (eligible.Any())
+                {
+                    double avgSales  = eligible.Average(s => (double)s.Calc.TotalScore) * 100;
+                    double avgRuta   = eligible.Where(s => s.Calc.RutaScore.HasValue).Any()
+                                        ? eligible.Where(s => s.Calc.RutaScore.HasValue).Average(s => (double)s.Calc.RutaScore!.Value) * 100 : 0;
+                    double avgDist   = eligible.Where(s => s.Calc.DistScore.HasValue).Any()
+                                        ? eligible.Where(s => s.Calc.DistScore.HasValue).Average(s => (double)s.Calc.DistScore!.Value) * 100 : 0;
+                    double avgStrike = eligible.Where(s => s.Calc.OrderScore.HasValue).Any()
+                                        ? eligible.Where(s => s.Calc.OrderScore.HasValue).Average(s => (double)s.Calc.OrderScore!.Value) * 100 : 0;
+
+                    await JS.InvokeVoidAsync("renderChart", "bmRadarChart", new
+                    {
+                        type = "radar",
+                        data = new
+                        {
+                            labels = new[] { "Satış", "Ruta", "Dağıtım", "Strike" },
+                            datasets = new object[]
+                            {
+                                new { label = "Bölge Ort.", data = new[] { Math.Round(avgSales,1), Math.Round(avgRuta,1), Math.Round(avgDist,1), Math.Round(avgStrike,1) },
+                                    backgroundColor = "rgba(99,102,241,0.18)", borderColor = "#818cf8", borderWidth = 2, pointBackgroundColor = "#818cf8" },
+                                new { label = "Eşik 85%",  data = new[] { 85.0, 85.0, 85.0, 85.0 },
+                                    backgroundColor = "rgba(16,185,129,0.04)", borderColor = "rgba(16,185,129,0.4)", borderWidth = 1,
+                                    pointRadius = 0, borderDash = new[] { 5, 5 } }
+                            }
+                        },
+                        options = new
+                        {
+                            responsive = true,
+                            plugins = new { legend = new { labels = new { color = "#94a3b8", font = new { size = 10 } } } },
+                            scales = new { r = new { min = 0, max = 100, grid = new { color = "rgba(255,255,255,0.07)" },
+                                ticks = new { color = "#64748b", stepSize = 25, font = new { size = 9 } },
+                                pointLabels = new { color = "#94a3b8", font = new { size = 10 } } } }
+                        }
+                    });
+                }
+            }
+
+            // ST: radar (kendi 4 KPI) — yalnız satış modunda gizli
+            if (Session.IsST && !salesOnlyMode && publishedSummaries.Any())
+            {
+                var my = publishedSummaries.FirstOrDefault();
+                if (my != null)
+                {
+                    double sales  = (double)my.Calc.TotalScore * 100;
+                    double ruta   = my.Calc.RutaScore.HasValue   ? (double)my.Calc.RutaScore.Value * 100   : 0;
+                    double dist   = my.Calc.DistScore.HasValue   ? (double)my.Calc.DistScore.Value * 100   : 0;
+                    double strike = my.Calc.OrderScore.HasValue  ? (double)my.Calc.OrderScore.Value * 100  : 0;
+
+                    await JS.InvokeVoidAsync("renderChart", "stRadarChart", new
+                    {
+                        type = "radar",
+                        data = new
+                        {
+                            labels = new[] { "Satış", "Ruta", "Dağıtım", "Strike" },
+                            datasets = new object[]
+                            {
+                                new { label = "Sizin Skorunuz", data = new[] { Math.Round(sales,1), Math.Round(ruta,1), Math.Round(dist,1), Math.Round(strike,1) },
+                                    backgroundColor = "rgba(99,102,241,0.2)", borderColor = "#818cf8", borderWidth = 2, pointBackgroundColor = "#818cf8" },
+                                new { label = "Eşik 85%", data = new[] { 85.0, 85.0, 85.0, 85.0 },
+                                    backgroundColor = "rgba(16,185,129,0.04)", borderColor = "rgba(16,185,129,0.5)", borderWidth = 1,
+                                    pointRadius = 0, borderDash = new[] { 4, 4 } }
+                            }
+                        },
+                        options = new
+                        {
+                            responsive = true,
+                            plugins = new { legend = new { labels = new { color = "#94a3b8", font = new { size = 10 } } } },
+                            scales = new { r = new { min = 0, max = 100, grid = new { color = "rgba(255,255,255,0.07)" },
+                                ticks = new { color = "#64748b", stepSize = 25, font = new { size = 9 } },
+                                pointLabels = new { color = "#94a3b8", font = new { size = 11 } } } }
+                        }
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Home.LoadHomeData] JS hazır değil veya veri yok: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshStars()
+    {
+        starsRefreshing = true;
+        StateHasChanged();
+        try { (volumeStar, reachStar) = await CalcSvc.GetOrderBadgesAsync(); }
+        finally { starsRefreshing = false; StateHasChanged(); }
+    }
+
+    private async Task SaveStarCriteria()
+    {
+        starCriteriaSaving = true; starCriteriaMsg = "";
+        try
+        {
+            await CalcSvc.SaveStarCriteriaAsync(editWeekMetric, editMonthMetric, Session.CurrentUser!.UserId);
+            (volumeStar, reachStar) = await CalcSvc.GetOrderBadgesAsync();
+            starCriteriaMsg = "Kriterler kaydedildi.";
+            await Task.Delay(1500);
+            showStarCriteriaPopup = false;
+        }
+        finally { starCriteriaSaving = false; starCriteriaMsg = ""; }
+    }
+
+}

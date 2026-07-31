@@ -1,0 +1,552 @@
+﻿@page "/bricks"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@inject ExportService ExportSvc
+@inject CalculationService CalcSvc
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+@if (!Session.CanManage)
+{
+    <NotAuthorizedView />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:1200px;margin:0 auto;padding:20px">
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">@message</div>
+        }
+
+        <!-- Kalıcı bilgi: atama tek başına raporu değiştirmez -->
+        <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:9px 14px;margin-bottom:12px;color:#fbbf24;font-size:11.5px;line-height:1.6">
+            ℹ Brick atamasını değiştirmek yalnız <strong>sorumlu ST'yi</strong> günceller; brick'in kendi sell-out/hedef sayıları (per-brick tablosu) değişmez — değişim yalnız <strong>ST bazında toplamlarda</strong> görünür. Değişikliklerin rapor/analiz/ST ekranlarına yansıması için aşağıdaki <strong>⚡ Aktifle</strong> butonunu kullanın.
+        </div>
+
+        @if (Session.CanManage)
+        {
+            <!-- AKTİFLE: tek tıkla Yeniden Hesapla + Yayınla (brick + ağırlık değişikliklerini canlıya alır) -->
+            <div style="background:#111827;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+                <span style="font-size:12px;font-weight:700;color:#f1f5f9">⚡ Değişiklikleri Aktifle</span>
+                <select @bind="activateYear" disabled="@isActivating" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+                <select @bind="activateQuarter" disabled="@isActivating" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                </select>
+                <button @onclick="StartActivate" disabled="@isActivating"
+                        style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
+                    @(isActivating ? "⏳ Aktifleniyor..." : "⚡ Aktifle (Yeniden Hesapla + Yayınla)")
+                </button>
+                <span style="color:#64748b;font-size:11px;margin-left:auto">Brick, ortak pay ve ürün ağırlığı değişikliklerini seçili çeyreğe uygular.</span>
+            </div>
+
+            @if (showActivateConfirm)
+            {
+                <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px;margin-bottom:14px">
+                    @if (activateIssues.Any())
+                    {
+                        <div style="font-size:12.5px;font-weight:700;color:#ef4444;margin-bottom:6px">⚠ Veri eksik — sonuç yanıltıcı olabilir:</div>
+                        <div style="font-size:11.5px;color:#f59e0b;margin-bottom:10px;display:flex;flex-direction:column;gap:3px">
+                            @foreach (var iss in activateIssues)
+                            {
+                                <div>• @iss</div>
+                            }
+                        </div>
+                    }
+                    <div style="font-size:12.5px;color:#f1f5f9;margin-bottom:10px">
+                        <strong>@activateQuarter @activateYear</strong> yeniden hesaplanıp <strong>yayınlanacak</strong>; ST'lere bildirim gidecek. Onaylıyor musun?
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <button @onclick="ConfirmActivate" disabled="@isActivating"
+                                style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
+                            ⚡ Evet, Aktifle
+                        </button>
+                        <button @onclick="() => { showActivateConfirm = false; }" disabled="@isActivating"
+                                style="padding:7px 16px;background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:7px;font-size:12px;cursor:pointer">
+                            Vazgeç
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+
+        <!-- FİLTRELER -->
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+            <select @bind="filterRegion" @bind:after="ApplyFilter" style="padding:8px 12px;background:#111827;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:12px">
+                <option value="0">Tüm Bölgeler</option>
+                @foreach (var r in regions)
+                {
+                    <option value="@r.RegionId">@r.Name</option>
+                }
+            </select>
+
+            <select @bind="filterCity" @bind:after="ApplyFilter" style="padding:8px 12px;background:#111827;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:12px">
+                <option value="">Tüm Şehirler</option>
+                @foreach (var c in cities)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+
+            <select @bind="filterST" @bind:after="ApplyFilter" style="padding:8px 12px;background:#111827;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:12px">
+                <option value="0">Tüm ST'ler</option>
+                <option value="-1">Atanmamış</option>
+                @foreach (var st in stList)
+                {
+                    <option value="@st.UserId">@st.FullName</option>
+                }
+            </select>
+
+            <input @bind="searchText" @bind:after="ApplyFilter" placeholder="Brick ara..." style="padding:8px 12px;background:#111827;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:12px;width:200px" />
+
+            <span style="color:#64748b;font-size:12px;margin-left:auto">@filteredBricks.Count sonuç</span>
+
+            <button @onclick="DownloadExcel" disabled="@isExporting" title="Filtrelenmiş brick yapısını Excel olarak indir"
+                    style="padding:8px 14px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                @(isExporting ? "⏳ Hazırlanıyor..." : "⬇ Excel")
+            </button>
+        </div>
+
+        <!-- ST BRICK ÖZETİ -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:14px;margin-bottom:16px">
+            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:10px">ST Brick Özeti</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+                @foreach (var st in stList)
+                {
+                    var count = userBricks.Count(ub => ub.UserId == st.UserId && ub.IsActive);
+                    <span @onclick="() => { filterST = st.UserId; ApplyFilter(); }" style="padding:4px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;font-size:11px;color:#f1f5f9;cursor:pointer;display:inline-flex;gap:4px;align-items:center">
+                        @st.FullName <span style="color:#3b82f6;font-weight:700">@count</span>
+                    </span>
+                }
+                <span style="padding:4px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:11px;color:#ef4444;cursor:pointer" @onclick="() => { filterST = -1; ApplyFilter(); }">
+                    Atanmamış <span style="font-weight:700">@unassignedBricks</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- BRICK TABLOSU -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead>
+                    <tr style="background:#171f2e">
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BRICK ADI</th>
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ŞEHİR</th>
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BÖLGE</th>
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ATANMIŞ ST</th>
+                        @if (Session.CanManage)
+                        {
+                            <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">İŞLEM</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var brick in filteredBricks.Take(100))
+                    {
+                        var owners = userBricks.Where(ub => ub.BrickId == brick.BrickId && ub.IsActive)
+                                               .OrderByDescending(ub => ub.SharePercent).ToList();
+                        var isShared = owners.Count >= 2;
+
+                        <tr @key="brick.BrickId" style="border-bottom:1px solid #1e293b22">
+                            <td style="padding:8px 14px;color:#f1f5f9;font-weight:500">@brick.Name</td>
+                            <td style="padding:8px 14px;color:#94a3b8">@brick.City</td>
+                            <td style="padding:8px 14px">
+                                @if (brick.Region != null)
+                                {
+                                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(59,130,246,0.12);color:#3b82f6">@brick.Region.Name</span>
+                                }
+                                else
+                                {
+                                    <span style="color:#64748b;font-size:11px">—</span>
+                                }
+                            </td>
+                            <td style="padding:8px 14px">
+                                @if (editingBrickId == brick.BrickId && Session.CanManage)
+                                {
+                                    <div style="display:flex;flex-direction:column;gap:6px">
+                                        <div style="display:flex;align-items:center;gap:4px">
+                                            <select @bind="editSTId" style="padding:4px 8px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:12px">
+                                                <option value="0">— Atanmamış —</option>
+                                                @foreach (var st in stList)
+                                                {
+                                                    <option value="@st.UserId">@st.FullName</option>
+                                                }
+                                            </select>
+                                            <button @onclick="() => SaveAssignment(brick.BrickId)" style="background:none;border:none;cursor:pointer;color:#10b981;font-size:14px;margin-left:2px" title="Kaydet">✓</button>
+                                            <button @onclick="CancelAssignment" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px" title="Vazgeç">✕</button>
+                                        </div>
+                                        @if (editSTId > 0)
+                                        {
+                                            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#fbbf24;cursor:pointer">
+                                                <input type="checkbox" @bind="editShared" style="cursor:pointer" /> 🤝 Ortak (2. ST ekle)
+                                            </label>
+                                        }
+                                        @if (editShared && editSTId > 0)
+                                        {
+                                            <div style="display:flex;align-items:center;gap:4px">
+                                                <select @bind="editST2Id" style="padding:4px 8px;background:#0a0f1a;border:1px solid #f59e0b44;border-radius:6px;color:#f1f5f9;font-size:12px">
+                                                    <option value="0">— 2. ST seç —</option>
+                                                    @foreach (var st in stList.Where(s => s.UserId != editSTId))
+                                                    {
+                                                        <option value="@st.UserId">@st.FullName</option>
+                                                    }
+                                                </select>
+                                                <select @bind="editSharePercent" style="padding:4px 8px;background:#0a0f1a;border:1px solid #f59e0b44;border-radius:6px;color:#fbbf24;font-size:12px" title="Pay dağılımı (1. ST / 2. ST)">
+                                                    @foreach (var p in sharePresets)
+                                                    {
+                                                        <option value="@p">@p / @(100 - p)</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else if (owners.Count > 0)
+                                {
+                                    <div style="display:flex;flex-direction:column;gap:3px">
+                                        @if (isShared)
+                                        {
+                                            <span style="padding:1px 6px;border-radius:4px;font-size:9px;font-weight:800;background:rgba(245,158,11,0.15);color:#f59e0b;align-self:flex-start">🤝 ORTAK</span>
+                                        }
+                                        @foreach (var o in owners)
+                                        {
+                                            var oName = stList.FirstOrDefault(s => s.UserId == o.UserId)?.FullName ?? $"#{o.UserId}";
+                                            <span style="color:#10b981;font-weight:500;font-size:12px">
+                                                @oName@(isShared ? $" · %{o.SharePercent:0.#}" : "")
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span style="color:#ef4444;font-size:11px;font-style:italic">Atanmamış</span>
+                                }
+                            </td>
+                            @if (Session.CanManage)
+                            {
+                                <td style="padding:8px 14px;text-align:center">
+                                    @if (editingBrickId != brick.BrickId)
+                                    {
+                                        <button @onclick="() => StartAssignment(brick.BrickId)" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:12px" title="ST Ata/Değiştir">✏️</button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (filteredBricks.Count > 100)
+            {
+                <div style="padding:12px;text-align:center;color:#64748b;font-size:12px;border-top:1px solid #1e293b">
+                    İlk 100 gösteriliyor. Filtreleri kullanarak daraltın. (Toplam: @filteredBricks.Count)
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Brick> allBricks = new();
+    private List<Brick> filteredBricks = new();
+    private List<Region> regions = new();
+    private List<User> stList = new();
+    private List<UserBrick> userBricks = new();
+    private List<string> cities = new();
+    private int totalBricks, assignedBricks, unassignedBricks;
+    private string message = "";
+    private bool isExporting = false;
+
+    // Aktifle (Yeniden Hesapla + Yayınla)
+    private int activateYear = DateTime.Now.Year;
+    private string activateQuarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+    private bool isActivating = false;
+    private bool showActivateConfirm = false;
+    private List<string> activateIssues = new();
+
+    // Filters
+    private int filterRegion = 0;
+    private string filterCity = "";
+    private int filterST = 0;
+    private string searchText = "";
+
+    // Edit
+    private int editingBrickId = 0;
+    private int editSTId = 0;
+    private bool editShared = false;          // ortak brick modu
+    private int editST2Id = 0;                // 2. (ortak) ST
+    private decimal editSharePercent = 50m;   // 1. ST'nin payı; 2. ST = 100 - bu
+    private static readonly int[] sharePresets = { 50, 60, 70, 75, 80, 90 };
+
+    private bool _sessionChecked = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        // Varsayılan aktifleme dönemi: en güncel hesaplanan çeyrek (yoksa mevcut).
+        try
+        {
+            var latest = await CalcSvc.GetLatestCalculatedAsync();
+            if (latest != null) { activateYear = latest.Value.Year; activateQuarter = latest.Value.Quarter; }
+        }
+        catch { /* dönem yoksa varsayılan kalır */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        using var db = DbFactory.CreateDbContext();
+        allBricks = await db.Bricks.Include(b => b.Region).Where(b => b.IsActive).OrderBy(b => b.Name).ToListAsync();
+        regions = await db.Regions.Where(r => r.IsActive).OrderBy(r => r.Name).ToListAsync();
+        stList = await db.Users.Where(u => u.RoleId == RoleId.ST && u.IsActive && !u.IsDeleted).OrderBy(u => u.FullName).ToListAsync();
+        userBricks = await db.UserBricks.Where(ub => ub.IsActive).ToListAsync();
+        cities = allBricks.Where(b => !string.IsNullOrEmpty(b.City)).Select(b => b.City!).Distinct().OrderBy(c => c).ToList();
+
+        totalBricks = allBricks.Count;
+        var assignedBrickIds = userBricks.Select(ub => ub.BrickId).Distinct().ToHashSet();
+        assignedBricks = allBricks.Count(b => assignedBrickIds.Contains(b.BrickId));
+        unassignedBricks = totalBricks - assignedBricks;
+
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var query = allBricks.AsEnumerable();
+
+        if (filterRegion > 0)
+            query = query.Where(b => b.RegionId == filterRegion);
+
+        if (!string.IsNullOrEmpty(filterCity))
+            query = query.Where(b => b.City == filterCity);
+
+        if (filterST > 0)
+        {
+            var stBrickIds = userBricks.Where(ub => ub.UserId == filterST && ub.IsActive).Select(ub => ub.BrickId).ToHashSet();
+            query = query.Where(b => stBrickIds.Contains(b.BrickId));
+        }
+        else if (filterST == -1)
+        {
+            var allAssigned = userBricks.Where(ub => ub.IsActive).Select(ub => ub.BrickId).ToHashSet();
+            query = query.Where(b => !allAssigned.Contains(b.BrickId));
+        }
+
+        if (!string.IsNullOrEmpty(searchText))
+            query = query.Where(b => b.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+        filteredBricks = query.ToList();
+    }
+
+    private void StartAssignment(int brickId)
+    {
+        editingBrickId = brickId;
+        var owners = userBricks.Where(ub => ub.BrickId == brickId && ub.IsActive)
+                               .OrderByDescending(ub => ub.SharePercent).ToList();
+        editSTId = owners.Count > 0 ? owners[0].UserId : 0;
+        if (owners.Count >= 2)
+        {
+            editShared = true;
+            editST2Id = owners[1].UserId;
+            editSharePercent = NearestPreset(owners[0].SharePercent);
+        }
+        else
+        {
+            editShared = false;
+            editST2Id = 0;
+            editSharePercent = 50m;
+        }
+    }
+
+    // Kayıtlı payı en yakın preset'e oturtur (dropdown yalnız preset değerleri sunar).
+    private static decimal NearestPreset(decimal value) =>
+        sharePresets.OrderBy(p => Math.Abs(p - value)).First();
+
+    private void CancelAssignment() { editingBrickId = 0; }
+
+    private async Task SaveAssignment(int brickId)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var now = DateTime.UtcNow;
+
+        // Hedef sahip kümesi: uid → pay (%). Tek sahip 100; ortak 1.ST=pay, 2.ST=100-pay.
+        var desired = new Dictionary<int, decimal>();
+        if (editSTId > 0)
+        {
+            if (editShared && editST2Id > 0 && editST2Id != editSTId)
+            {
+                desired[editSTId] = editSharePercent;
+                desired[editST2Id] = 100m - editSharePercent;
+            }
+            else
+            {
+                desired[editSTId] = 100m;
+            }
+        }
+
+        var rows = await db.UserBricks.Where(ub => ub.BrickId == brickId).ToListAsync();
+        // Hedefte olmayan aktif sahipleri pasifle
+        foreach (var r in rows.Where(r => r.IsActive && !desired.ContainsKey(r.UserId)))
+        {
+            r.IsActive = false;
+            r.UnassignedAt = now;
+        }
+        // Hedefleri upsert (pay dahil)
+        foreach (var (uid, share) in desired)
+        {
+            var r = rows.FirstOrDefault(x => x.UserId == uid);
+            if (r == null)
+            {
+                db.UserBricks.Add(new UserBrick { UserId = uid, BrickId = brickId, IsActive = true, AssignedAt = now, SharePercent = share });
+            }
+            else
+            {
+                if (!r.IsActive) { r.IsActive = true; r.AssignedAt = now; r.UnassignedAt = null; }
+                r.SharePercent = share;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        editingBrickId = 0;
+
+        var brickName = allBricks.FirstOrDefault(b => b.BrickId == brickId)?.Name ?? "";
+        string stName = desired.Count switch
+        {
+            0 => "Atanmamış",
+            1 => stList.FirstOrDefault(s => s.UserId == desired.Keys.First())?.FullName ?? "",
+            _ => string.Join(" + ", desired.Select(d => $"{stList.FirstOrDefault(s => s.UserId == d.Key)?.FullName} (%{d.Value:0.#})"))
+        };
+        message = $"{brickName} → {stName} · Rapor/analiz/ST ekranlarına yansıması için ⚡ Aktifle butonunu kullanın.";
+
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    // Aktifle: veri kontrolü → onay paneli (dışa-dönük yayın için).
+    private async Task StartActivate()
+    {
+        if (isActivating) return;
+        activateIssues.Clear();
+        try
+        {
+            var dc = await CalcSvc.CheckDataAsync(activateYear, activateQuarter);
+            if (dc.PeriodCount < 3) activateIssues.Add($"Dönem eksik: {activateQuarter} için {dc.PeriodCount}/3 ay tanımlı");
+            if (dc.TargetCount == 0) activateIssues.Add("Hiç Hedef verisi yok — satış skoru 0 çıkar");
+            if (dc.SellOutCount == 0) activateIssues.Add("Hiç Sell-Out verisi yok — satış skoru 0 çıkar");
+        }
+        catch { /* veri kontrolü başarısızsa yine de onay göster */ }
+        showActivateConfirm = true;
+    }
+
+    // Onay → Yeniden Hesapla + Yayınla (tek adım).
+    private async Task ConfirmActivate()
+    {
+        if (isActivating) return;
+        isActivating = true;
+        showActivateConfirm = false;
+        StateHasChanged();
+        try
+        {
+            var result = await CalcSvc.CalculateQuarterAsync(activateYear, activateQuarter, Session.RequireUserId());
+            if (!result.Success)
+            {
+                message = $"⚠ Hesaplama başarısız: {(string.IsNullOrEmpty(result.Error) ? "bilinmeyen hata" : result.Error)}";
+            }
+            else
+            {
+                await CalcSvc.PublishAsync(activateYear, activateQuarter, Session.RequireUserId());
+                message = $"✅ {activateQuarter} {activateYear} yeniden hesaplandı ve yayınlandı — rapor, analiz ve ST ekranlarına aktarıldı.";
+            }
+        }
+        catch (UnauthorizedAccessException) { message = "⚠ Bu işlem için yetkiniz yok."; }
+        catch (Exception) { message = "⚠ Aktifleme başarısız oldu. Lütfen tekrar deneyin."; }
+        finally
+        {
+            isActivating = false;
+            StateHasChanged();
+            _ = ClearMessage();
+        }
+    }
+
+    private int _msgVersion;
+
+    private async Task ClearMessage()
+    {
+        var v = ++_msgVersion;
+        await Task.Delay(3000);
+        if (v == _msgVersion) { message = ""; await InvokeAsync(StateHasChanged); }
+    }
+
+    // Filtrelenmiş brick yapısını Excel'e aktar (ekrandaki filtre/arama/ST seçimi korunur;
+    // Take(100) görüntü sınırı DEĞİL, tüm filtreli küme). Ortak brick → her sahip için satır.
+    private async Task DownloadExcel()
+    {
+        if (isExporting) return;
+        isExporting = true;
+        try
+        {
+            var rows = new List<BrickExportRow>();
+            foreach (var brick in filteredBricks)
+            {
+                var city = brick.City ?? "";
+                var region = brick.Region?.Name ?? "";
+                var owners = userBricks.Where(ub => ub.BrickId == brick.BrickId && ub.IsActive)
+                                       .OrderByDescending(ub => ub.SharePercent).ToList();
+                if (owners.Count == 0)
+                {
+                    rows.Add(new BrickExportRow(brick.Name, city, region, "Atanmamış", null, false));
+                }
+                else
+                {
+                    bool shared = owners.Count >= 2;
+                    foreach (var o in owners)
+                    {
+                        var stName = stList.FirstOrDefault(s => s.UserId == o.UserId)?.FullName ?? $"#{o.UserId}";
+                        rows.Add(new BrickExportRow(brick.Name, city, region, stName, o.SharePercent, shared));
+                    }
+                }
+            }
+
+            var bytes = ExportSvc.ExportBricks(rows);
+            await JS.InvokeVoidAsync("downloadBytes", $"Brick_Yapisi_{DateTime.Now:yyyyMMdd}.xlsx", bytes);
+        }
+        catch (Exception)
+        {
+            message = "Excel dışa aktarma başarısız oldu.";
+            _ = ClearMessage();
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+}

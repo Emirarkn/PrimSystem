@@ -1,0 +1,176 @@
+@using PrimSystem.Services
+@using PrimSystem.Data
+@inject PhotoService Photos
+@inject SessionState Session
+
+<div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px;margin-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:#f1f5f9">📷 Saha Fotoğraflarım</div>
+        <button @onclick="OpenPopup"
+                style="padding:7px 14px;background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(59,130,246,0.15));color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">
+            ＋ Fotoğraf Yükle
+        </button>
+    </div>
+
+    @if (myPhotos == null)
+    {
+        <div style="color:#475569;font-size:12px;padding:8px 0">Yükleniyor…</div>
+    }
+    else if (!myPhotos.Any())
+    {
+        <div style="color:#475569;font-size:12px;font-style:italic;padding:8px 0">Henüz fotoğraf yüklemediniz.</div>
+    }
+    else
+    {
+        <div style="display:flex;flex-direction:column;gap:8px">
+            @foreach (var p in myPhotos)
+            {
+                var (bg, fg, label) = StatusStyle(p.Status);
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#0a0f1a;border:1px solid rgba(255,255,255,0.05);border-radius:9px">
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@p.Title</div>
+                        @if (!string.IsNullOrEmpty(p.Purpose))
+                        {
+                            <div style="font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@p.Purpose</div>
+                        }
+                        <div style="font-size:10px;color:#475569;margin-top:2px">@p.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+                        @if (p.Status == "Rejected" && !string.IsNullOrEmpty(p.ReviewNote))
+                        {
+                            <div style="font-size:11px;color:#f87171;margin-top:3px">Ret notu: @p.ReviewNote</div>
+                        }
+                    </div>
+                    <span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:@bg;color:@fg;border:1px solid @(fg)44;white-space:nowrap">@label</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Yükleme Popup -->
+@if (showPopup)
+{
+    <div style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center"
+         @onclick="ClosePopup">
+        <div style="background:#111827;border:1px solid #334155;border-radius:16px;padding:28px;width:440px;max-width:95vw;box-shadow:0 24px 60px rgba(0,0,0,0.6)"
+             @onclick:stopPropagation>
+            <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:6px">📷 Fotoğraf Yükle</div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:20px">Başlık, amaç ve görseli ekleyin. Yükleme sonrası kontrol için yöneticinize iletilir.</div>
+
+            <div style="margin-bottom:14px">
+                <label style="font-size:11px;font-weight:600;color:#94a3b8;display:block;margin-bottom:6px">Başlık *</label>
+                <input @bind="title" maxlength="200" placeholder="ör. Raf düzeni — X Eczanesi"
+                       style="width:100%;background:#0a0f1a;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;box-sizing:border-box" />
+            </div>
+
+            <div style="margin-bottom:14px">
+                <label style="font-size:11px;font-weight:600;color:#94a3b8;display:block;margin-bottom:6px">Amaç / Açıklama</label>
+                <textarea @bind="purpose" maxlength="1000" rows="3" placeholder="Fotoğrafın amacını kısaca yazın"
+                          style="width:100%;background:#0a0f1a;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+            </div>
+
+            <div style="margin-bottom:18px">
+                <label style="font-size:11px;font-weight:600;color:#94a3b8;display:block;margin-bottom:6px">Görsel (PNG/JPEG/WEBP, maks 5 MB) *</label>
+                <InputFile OnChange="OnFileSelected" accept="image/png,image/jpeg,image/webp" />
+                @if (!string.IsNullOrEmpty(fileName))
+                {
+                    <div style="font-size:11px;color:#64748b;margin-top:6px">Seçilen: @fileName (@($"{fileSize/1024:N0}") KB)</div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div style="background:@(isError ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)");border:1px solid @(isError ? "rgba(239,68,68,0.3)" : "rgba(16,185,129,0.3)");border-radius:7px;padding:8px 12px;margin-bottom:12px;color:@(isError ? "#f87171" : "#10b981");font-size:12px">@message</div>
+            }
+
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+                <button @onclick="ClosePopup"
+                        style="padding:8px 18px;background:rgba(148,163,184,0.08);color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">İptal</button>
+                <button @onclick="Submit" disabled="@(saving || pendingData == null)"
+                        style="padding:8px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:@(saving || pendingData == null ? "not-allowed" : "pointer");opacity:@(saving || pendingData == null ? "0.6" : "1")">
+                    @(saving ? "Yükleniyor…" : "Yükle")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<StPhotoListItem>? myPhotos;
+    private bool showPopup;
+    private bool saving;
+    private bool isError;
+    private string? message;
+    private string title = "";
+    private string? purpose;
+    private string? fileName;
+    private long fileSize;
+    private byte[]? pendingData;
+    private string? pendingContentType;
+
+    protected override async Task OnInitializedAsync() => await LoadMine();
+
+    private async Task LoadMine()
+    {
+        if (Session.CurrentUser == null) { myPhotos = new(); return; }
+        myPhotos = await Photos.GetMyPhotosAsync(Session.CurrentUser.UserId);
+    }
+
+    private void OpenPopup()
+    {
+        title = ""; purpose = null; fileName = null; fileSize = 0;
+        pendingData = null; pendingContentType = null; message = null; isError = false;
+        showPopup = true;
+    }
+
+    private void ClosePopup() => showPopup = false;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        message = null; isError = false;
+        var file = e.File;
+        if (file.Size > PhotoService.MaxBytes)
+        {
+            isError = true; message = "Dosya çok büyük (maks 5 MB)."; pendingData = null; return;
+        }
+        try
+        {
+            using var ms = new MemoryStream();
+            await using (var s = file.OpenReadStream(PhotoService.MaxBytes))
+                await s.CopyToAsync(ms);
+            pendingData = ms.ToArray();
+            pendingContentType = file.ContentType;
+            fileName = file.Name;
+            fileSize = file.Size;
+        }
+        catch
+        {
+            isError = true; message = "Dosya okunamadı."; pendingData = null;
+        }
+    }
+
+    private async Task Submit()
+    {
+        if (saving || pendingData == null || Session.CurrentUser == null) return;
+        saving = true; message = null; isError = false; StateHasChanged();
+        try
+        {
+            var (ok, err) = await Photos.UploadAsync(
+                Session.CurrentUser.UserId, title, purpose, pendingData,
+                pendingContentType ?? "application/octet-stream", fileName ?? "foto");
+            if (ok)
+            {
+                showPopup = false;
+                await LoadMine();
+            }
+            else { isError = true; message = err; }
+        }
+        finally { saving = false; StateHasChanged(); }
+    }
+
+    private static (string Bg, string Fg, string Label) StatusStyle(string status) => status switch
+    {
+        "Approved" => ("rgba(16,185,129,0.12)", "#10b981", "Onaylı"),
+        "Rejected" => ("rgba(239,68,68,0.1)",  "#f87171", "Reddedildi"),
+        _          => ("rgba(245,158,11,0.12)", "#f59e0b", "Bekliyor")
+    };
+}

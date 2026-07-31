@@ -1,0 +1,401 @@
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@inject CalculationService CalcSvc
+@inject SessionState Session
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<!-- Şalter butonu — sağ kenarda sabit -->
+<div style="position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:900;display:flex;flex-direction:column;align-items:flex-end;gap:0">
+    <button @onclick="Toggle"
+            style="writing-mode:vertical-rl;text-orientation:mixed;padding:14px 8px;background:@(isOpen ? "linear-gradient(180deg,#6366f1,#3b82f6)" : "linear-gradient(180deg,#1e293b,#0f172a)");color:@(isOpen ? "#fff" : "#94a3b8");border:1px solid @(isOpen ? "rgba(99,102,241,0.5)" : "rgba(255,255,255,0.08)");border-right:none;border-radius:10px 0 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:-4px 0 16px rgba(0,0,0,0.3);transition:all 0.2s">
+        <span style="font-size:14px;writing-mode:horizontal-tb">@(isOpen ? "✕" : "📋")</span>
+        YAYINLAR
+    </button>
+</div>
+
+<!-- Panel -->
+<div style="position:fixed;right:@(isOpen ? "0" : "-440px");top:0;width:420px;height:100vh;background:#0d1424;border-left:1px solid rgba(255,255,255,0.06);z-index:899;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,0.5);transition:right 0.28s cubic-bezier(0.4,0,0.2,1);overflow:hidden">
+
+    <!-- Başlık -->
+    <div style="padding:18px 20px 14px;border-bottom:1px solid #1e293b;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+                <div style="font-size:15px;font-weight:800;color:#f1f5f9">📋 Yayın Durumu</div>
+                <div style="font-size:11px;color:#475569;margin-top:2px">Tüm yayınlanan dönemler</div>
+            </div>
+            <button @onclick="Toggle" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#64748b;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px">✕</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(actionMsg))
+    {
+        <div style="background:rgba(16,185,129,0.1);border-bottom:1px solid rgba(16,185,129,0.3);padding:8px 16px;color:#10b981;font-size:11px;text-align:center">@actionMsg</div>
+    }
+    @if (!string.IsNullOrEmpty(actionErr))
+    {
+        <div style="background:rgba(239,68,68,0.1);border-bottom:1px solid rgba(239,68,68,0.3);padding:8px 16px;color:#ef4444;font-size:11px;text-align:center">@actionErr</div>
+    }
+
+    <!-- İçerik -->
+    <div style="flex:1;overflow-y:auto;padding:14px 16px">
+        @if (isLoading)
+        {
+            <div style="text-align:center;color:#475569;font-size:13px;padding:40px 0">Yükleniyor...</div>
+        }
+        else if (!periods.Any() && !leaderboards.Any())
+        {
+            <div style="text-align:center;padding:48px 0">
+                <div style="font-size:36px;margin-bottom:12px">📭</div>
+                <div style="color:#475569;font-size:13px">Yayınlanan dönem yok</div>
+            </div>
+        }
+        else
+        {
+            @if (periods.Any())
+            {
+                <div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">📊 PRİM HESAPLAMALARI</div>
+                @foreach (var p in periods)
+                {
+                    var passColor = p.PassRate >= 70 ? "#10b981" : p.PassRate >= 50 ? "#f59e0b" : "#ef4444";
+                    var calcKey = $"calc_{p.Year}_{p.Quarter}";
+                    var isExpanded = expandedKey == calcKey;
+                    var borderColor = p.IsPaused ? "rgba(245,158,11,0.4)" : "#1e293b";
+                    var pCopy = p;
+
+                    <div style="background:#111827;border:1px solid @borderColor;border-radius:12px;margin-bottom:10px;overflow:hidden">
+                        <!-- Dönem başlığı -->
+                        <div @onclick="() => TogglePeriod(calcKey, () => LoadCalcDetails(pCopy))"
+                             style="padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:background 0.15s">
+                            <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(59,130,246,0.15));border:1px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#818cf8;flex-shrink:0">
+                                @p.Quarter
+                            </div>
+                            <div style="flex:1;min-width:0">
+                                <div style="display:flex;align-items:center;gap:6px">
+                                    <span style="font-size:13px;font-weight:700;color:#f1f5f9">@p.Quarter @p.Year</span>
+                                    @if (p.IsPaused)
+                                    {
+                                        <span style="padding:1px 6px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">⏸ Beklemede</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="padding:1px 6px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">● Aktif</span>
+                                    }
+                                </div>
+                                <div style="font-size:10px;color:#475569;margin-top:2px">
+                                    @p.PublishedAt?.ToLocalTime().ToString("dd.MM.yyyy") · @p.Total ST
+                                </div>
+                            </div>
+                            <div style="text-align:right;flex-shrink:0">
+                                <div style="font-size:15px;font-weight:800;font-family:monospace;color:@passColor">%@(p.PassRate.ToString("F0"))</div>
+                                <div style="font-size:10px;color:#475569">geçiş</div>
+                            </div>
+                            <div style="color:#475569;font-size:12px;margin-left:4px">@(isExpanded ? "▲" : "▼")</div>
+                        </div>
+
+                        <!-- Yönetim butonları -->
+                        @if (Session.CanManage)
+                        {
+                            <div style="display:flex;gap:6px;padding:8px 14px;border-top:1px solid #1e293b;background:rgba(0,0,0,0.15)">
+                                @if (p.IsPaused)
+                                {
+                                    <button @onclick="() => ResumeCalc(p.Year, p.Quarter)" @onclick:stopPropagation
+                                            style="flex:1;padding:5px 8px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+                                        ▶ Devam Et
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button @onclick="() => PauseCalc(p.Year, p.Quarter)" @onclick:stopPropagation
+                                            style="flex:1;padding:5px 8px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+                                        ⏸ Beklet
+                                    </button>
+                                }
+                                <button @onclick="() => StopCalc(p.Year, p.Quarter)" @onclick:stopPropagation
+                                        style="flex:1;padding:5px 8px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+                                    ⏹ Durdur
+                                </button>
+                            </div>
+                        }
+
+                        <!-- Özet istatistikler -->
+                        <div style="display:flex;gap:0;border-top:1px solid #1e293b">
+                            <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e293b">
+                                <div style="font-size:17px;font-weight:800;color:#10b981">@p.Passed</div>
+                                <div style="font-size:9px;color:#64748b;font-weight:600;text-transform:uppercase">GEÇTİ</div>
+                            </div>
+                            <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e293b">
+                                <div style="font-size:17px;font-weight:800;color:#ef4444">@p.Failed</div>
+                                <div style="font-size:9px;color:#64748b;font-weight:600;text-transform:uppercase">KALDI</div>
+                            </div>
+                            <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e293b">
+                                <div style="font-size:17px;font-weight:800;color:#f59e0b">@p.Ineligible</div>
+                                <div style="font-size:9px;color:#64748b;font-weight:600;text-transform:uppercase">PRİM DIŞI</div>
+                            </div>
+                            <div style="flex:1;padding:10px;text-align:center">
+                                <div style="font-size:17px;font-weight:800;color:#3b82f6">%@(p.AvgScore.ToString("F0"))</div>
+                                <div style="font-size:9px;color:#64748b;font-weight:600;text-transform:uppercase">ORTALAMA</div>
+                            </div>
+                        </div>
+
+                        @if (isExpanded && p.Details != null && p.Details.Any())
+                        {
+                            <div style="border-top:1px solid #1e293b;max-height:320px;overflow-y:auto">
+                                @foreach (var s in p.Details)
+                                {
+                                    var sc = (s.Calc.FinalScore ?? s.Calc.TotalScore) * 100;
+                                    var scColor = !s.Calc.IsEligible ? "#f59e0b" : s.Calc.PassedGate ? "#10b981" : "#ef4444";
+                                    var statusText = !s.Calc.IsEligible ? "Prim Dışı" : s.Calc.PassedGate ? "GEÇTİ" : "KALDI";
+                                    <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.03)">
+                                        <div style="width:6px;height:6px;border-radius:50%;background:@scColor;flex-shrink:0"></div>
+                                        <div style="flex:1;min-width:0">
+                                            <div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@s.Calc.User?.FullName</div>
+                                            <div style="font-size:10px;color:#475569">@(s.Calc.User?.Region?.Name ?? "")</div>
+                                        </div>
+                                        <div style="text-align:right;flex-shrink:0">
+                                            <div style="font-size:13px;font-weight:800;font-family:monospace;color:@scColor">%@(sc.ToString("F1"))</div>
+                                            <div style="font-size:9px;font-weight:700;color:@scColor">@statusText</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        @if (isExpanded && p.Details == null)
+                        {
+                            <div style="padding:12px;text-align:center;color:#475569;font-size:12px;border-top:1px solid #1e293b">Yükleniyor...</div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (leaderboards.Any())
+            {
+                <div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin:14px 0 8px">🏆 SİPARİŞ SIRALAMALARI</div>
+                @foreach (var l in leaderboards)
+                {
+                    var borderColor = l.IsPaused ? "rgba(245,158,11,0.4)" : "#1e293b";
+                    <div style="background:#111827;border:1px solid @borderColor;border-radius:12px;margin-bottom:10px;overflow:hidden">
+                        <div style="padding:12px 14px;display:flex;align-items:center;gap:10px">
+                            <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.12));border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📊</div>
+                            <div style="flex:1;min-width:0">
+                                <div style="display:flex;align-items:center;gap:6px">
+                                    <span style="font-size:13px;font-weight:700;color:#f1f5f9">@(l.ProductName ?? "Tüm Ürünler")</span>
+                                    @if (l.IsPaused)
+                                    {
+                                        <span style="padding:1px 6px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">⏸ Beklemede</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="padding:1px 6px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">● Aktif</span>
+                                    }
+                                </div>
+                                <div style="font-size:10px;color:#475569;margin-top:2px">
+                                    @(l.Quarter ?? "Tüm") @l.Year · @l.PublishedAt.ToLocalTime().ToString("dd.MM.yyyy")
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (Session.CanManage)
+                        {
+                            <div style="display:flex;gap:6px;padding:8px 14px;border-top:1px solid #1e293b;background:rgba(0,0,0,0.15)">
+                                @if (l.IsPaused)
+                                {
+                                    <button @onclick="ResumeLb"
+                                            style="flex:1;padding:5px 8px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+                                        ▶ Devam Et
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button @onclick="PauseLb"
+                                            style="flex:1;padding:5px 8px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+                                        ⏸ Beklet
+                                    </button>
+                                }
+                                <button @onclick="StopLb"
+                                        style="flex:1;padding:5px 8px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+                                    ⏹ Durdur
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        }
+    </div>
+
+    <!-- Alt bilgi -->
+    <div style="padding:10px 16px;border-top:1px solid #1e293b;flex-shrink:0;text-align:center">
+        <span style="font-size:10px;color:#334155">@periods.Count hesaplama · @leaderboards.Count sıralama</span>
+    </div>
+</div>
+
+@code {
+    private bool isOpen = false;
+    private bool isLoading = false;
+    private bool _loaded = false;
+    private string? expandedKey = null;
+    private string? actionMsg;
+    private string? actionErr;
+
+    private List<PeriodSummary> periods = new();
+    private List<LeaderboardSummary> leaderboards = new();
+
+    private class PeriodSummary
+    {
+        public int Year { get; set; }
+        public string Quarter { get; set; } = "";
+        public int Total { get; set; }
+        public int Passed { get; set; }
+        public int Failed { get; set; }
+        public int Ineligible { get; set; }
+        public double PassRate { get; set; }
+        public double AvgScore { get; set; }
+        public DateTime? PublishedAt { get; set; }
+        public bool IsPaused { get; set; }
+        public List<CalcSummary>? Details { get; set; }
+    }
+
+    private class LeaderboardSummary
+    {
+        public int PublishId { get; set; }
+        public string? ProductName { get; set; }
+        public int? Year { get; set; }
+        public string? Quarter { get; set; }
+        public DateTime PublishedAt { get; set; }
+        public bool IsPaused { get; set; }
+    }
+
+    private async Task Toggle()
+    {
+        isOpen = !isOpen;
+        if (isOpen && !_loaded)
+            await LoadData();
+    }
+
+    private async Task TogglePeriod(string key, Func<Task> loader)
+    {
+        if (expandedKey == key) { expandedKey = null; return; }
+        expandedKey = key;
+        await loader();
+    }
+
+    private async Task LoadCalcDetails(PeriodSummary p)
+    {
+        if (p.Details != null) return;
+        p.Details = new List<CalcSummary>();
+        StateHasChanged();
+        p.Details = await CalcSvc.GetResultsAsync(p.Year, p.Quarter, publishedOnly: true);
+        p.Details = p.Details.OrderByDescending(s => s.Calc.FinalScore ?? s.Calc.TotalScore).ToList();
+    }
+
+    private async Task LoadData()
+    {
+        _loaded = true;
+        isLoading = true;
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            var allPublished = await db.Calculations
+                .Where(c => c.IsPublished)
+                .Select(c => new { c.Year, c.Quarter, c.PassedGate, c.IsEligible, c.FinalScore, c.TotalScore, c.PublishedAt, c.IsPaused })
+                .ToListAsync();
+
+            periods = allPublished
+                .GroupBy(c => new { c.Year, c.Quarter })
+                .Select(g =>
+                {
+                    var total = g.Count();
+                    var eligible = g.Count(c => c.IsEligible);
+                    var passed = g.Count(c => c.PassedGate && c.IsEligible);
+                    return new PeriodSummary
+                    {
+                        Year = g.Key.Year,
+                        Quarter = g.Key.Quarter,
+                        Total = total,
+                        Passed = passed,
+                        Failed = g.Count(c => !c.PassedGate && c.IsEligible),
+                        Ineligible = g.Count(c => !c.IsEligible),
+                        AvgScore = eligible > 0 ? g.Where(c => c.IsEligible).Average(c => (double)((c.FinalScore ?? c.TotalScore) * 100)) : 0,
+                        PassRate = eligible > 0 ? (double)passed / eligible * 100 : 0,
+                        PublishedAt = g.Max(c => c.PublishedAt),
+                        IsPaused = g.Any(c => c.IsPaused)
+                    };
+                })
+                .OrderByDescending(x => x.Year).ThenByDescending(x => x.Quarter)
+                .ToList();
+
+            var lbs = await db.OrderLeaderboardPublishes
+                .Include(l => l.Product)
+                .Where(l => l.IsActive)
+                .OrderByDescending(l => l.PublishedAt)
+                .ToListAsync();
+            leaderboards = lbs.Select(l => new LeaderboardSummary
+            {
+                PublishId = l.PublishId,
+                ProductName = l.Product?.Name,
+                Year = l.Year,
+                Quarter = l.Quarter,
+                PublishedAt = l.PublishedAt,
+                IsPaused = l.IsPaused
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PublishPanel.LoadData] {ex}");
+        }
+        finally { isLoading = false; }
+    }
+
+    private async Task PauseCalc(int year, string quarter)
+    {
+        await RunAction(() => CalcSvc.PauseAsync(year, quarter, Session.RequireUserId()), $"{quarter} {year} bekletildi");
+    }
+    private async Task ResumeCalc(int year, string quarter)
+    {
+        await RunAction(() => CalcSvc.ResumeAsync(year, quarter, Session.RequireUserId()), $"{quarter} {year} yeniden aktif");
+    }
+    private async Task StopCalc(int year, string quarter)
+    {
+        await RunAction(() => CalcSvc.UnpublishAsync(year, quarter, Session.RequireUserId()), $"{quarter} {year} durduruldu");
+    }
+    private async Task PauseLb()
+    {
+        await RunAction(() => CalcSvc.PauseOrderLeaderboardAsync(Session.RequireUserId()), "Sıralama bekletildi");
+    }
+    private async Task ResumeLb()
+    {
+        await RunAction(() => CalcSvc.ResumeOrderLeaderboardAsync(Session.RequireUserId()), "Sıralama yeniden aktif");
+    }
+    private async Task StopLb()
+    {
+        await RunAction(() => CalcSvc.StopOrderLeaderboardAsync(Session.RequireUserId()), "Sıralama durduruldu");
+    }
+
+    private async Task RunAction(Func<Task> action, string successMsg)
+    {
+        actionMsg = null; actionErr = null;
+        try
+        {
+            await action();
+            actionMsg = successMsg;
+            _loaded = false;
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { actionErr = "Bu işlem için yetkiniz yok."; }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PublishPanel.Action] {ex}");
+            actionErr = "İşlem başarısız.";
+        }
+        _ = ClearMsg();
+    }
+
+    private int _msgVer;
+    private async Task ClearMsg()
+    {
+        var v = ++_msgVer;
+        await Task.Delay(2500);
+        if (v == _msgVer) { actionMsg = null; actionErr = null; await InvokeAsync(StateHasChanged); }
+    }
+}

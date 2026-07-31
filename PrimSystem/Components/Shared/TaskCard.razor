@@ -1,0 +1,136 @@
+@using PrimSystem.Services
+@inject TaskService TaskSvc
+
+@* Tek görev kartı: durum rozeti + (atanan ST ise) durum butonları + yorum akışı.
+   Atayan tarafı (BM) salt-okunur durum görür, yorum yazabilir. *@
+
+<div style="background:#0a0f1a;border:1px solid @(BorderColor)33;border-radius:12px;padding:14px;margin-bottom:10px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:14px;font-weight:700;color:#f1f5f9">@Task.Title</span>
+                <span style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:800;background:@(PriorityColor)22;color:@PriorityColor;border:1px solid @(PriorityColor)44">@PriorityLabel</span>
+                <span style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:800;background:@(StatusColor)22;color:@StatusColor;border:1px solid @(StatusColor)44">@StatusLabel</span>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Task.Description))
+            {
+                <div style="font-size:12px;color:#94a3b8;margin-top:6px;white-space:pre-wrap">@Task.Description</div>
+            }
+            <div style="font-size:10px;color:#475569;margin-top:6px">
+                @(IsAssignee ? $"Atayan: {Task.AssignerName}" : $"Atanan: {Task.AssigneeName}")
+                · @Task.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")
+                @if (Task.Deadline.HasValue)
+                {
+                    <span style="color:@(Task.Deadline < DateTime.UtcNow && Task.Status != "Completed" ? "#ef4444" : "#64748b")"> · ⏰ @Task.Deadline.Value.ToLocalTime().ToString("dd.MM.yyyy")</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (IsAssignee && Task.Status != "Completed" && Task.Status != "Rejected")
+    {
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            @if (Task.Status == "New")
+            {
+                <button @onclick='() => Update("InProgress")' disabled="@busy" style="@btn("#3b82f6")">▶ Başla</button>
+            }
+            <button @onclick='() => Update("Completed")' disabled="@busy" style="@btn("#10b981")">✓ Tamamla</button>
+            <button @onclick='() => Update("Rejected")' disabled="@busy" style="@btn("#ef4444")">✗ Reddet</button>
+        </div>
+    }
+
+    <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px">
+        <button @onclick="ToggleComments" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:600;cursor:pointer;padding:0">
+            💬 Yorumlar @(showComments ? "▲" : "▼")
+        </button>
+        @if (showComments)
+        {
+            @foreach (var cm in comments)
+            {
+                <div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px">
+                    <div style="font-size:10px;color:#64748b">@cm.UserName · @cm.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</div>
+                    <div style="font-size:12px;color:#cbd5e1;margin-top:2px;white-space:pre-wrap">@cm.Comment</div>
+                </div>
+            }
+            <div style="display:flex;gap:6px;margin-top:8px">
+                <input @bind="newComment" placeholder="Yorum yaz…" style="flex:1;padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px" />
+                <button @onclick="AddComment" disabled="@busy" style="@btn("#6366f1")">Gönder</button>
+            </div>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div style="font-size:11px;color:#ef4444;margin-top:6px">@error</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TaskListItem Task { get; set; } = null!;
+    [Parameter] public int CurrentUserId { get; set; }
+    [Parameter] public bool IsAssignee { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool showComments = false;
+    private bool busy = false;
+    private string newComment = "";
+    private string? error;
+    private List<TaskCommentItem> comments = new();
+
+    private async Task Update(string status)
+    {
+        busy = true; error = null;
+        var res = await TaskSvc.UpdateStatusAsync(Task.TaskId, CurrentUserId, status);
+        busy = false;
+        if (!res.Ok) { error = res.Error; return; }
+        if (OnChanged.HasDelegate) await OnChanged.InvokeAsync();
+    }
+
+    private async Task ToggleComments()
+    {
+        showComments = !showComments;
+        if (showComments) comments = await TaskSvc.GetCommentsAsync(Task.TaskId, CurrentUserId);
+    }
+
+    private async Task AddComment()
+    {
+        if (string.IsNullOrWhiteSpace(newComment)) return;
+        busy = true; error = null;
+        var res = await TaskSvc.AddCommentAsync(Task.TaskId, CurrentUserId, newComment);
+        busy = false;
+        if (!res.Ok) { error = res.Error; return; }
+        newComment = "";
+        comments = await TaskSvc.GetCommentsAsync(Task.TaskId, CurrentUserId);
+    }
+
+    private string BorderColor => StatusColor;
+    private string StatusColor => Task.Status switch
+    {
+        "Completed" => "#10b981",
+        "InProgress" => "#3b82f6",
+        "Rejected" => "#ef4444",
+        _ => "#64748b"
+    };
+    private string StatusLabel => Task.Status switch
+    {
+        "New" => "Yeni",
+        "InProgress" => "Devam ediyor",
+        "Completed" => "Tamamlandı",
+        "Rejected" => "Reddedildi",
+        _ => Task.Status
+    };
+    private string PriorityColor => Task.Priority switch
+    {
+        "High" => "#ef4444",
+        "Low" => "#64748b",
+        _ => "#f59e0b"
+    };
+    private string PriorityLabel => Task.Priority switch
+    {
+        "High" => "YÜKSEK",
+        "Low" => "DÜŞÜK",
+        _ => "ORTA"
+    };
+
+    private static string btn(string color) =>
+        $"padding:5px 10px;background:{color}1a;color:{color};border:1px solid {color}44;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer";
+}

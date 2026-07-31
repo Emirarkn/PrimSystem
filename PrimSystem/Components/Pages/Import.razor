@@ -1,0 +1,770 @@
+@page "/import"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ImportService ImportSvc
+@inject ExportService ExportSvc
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@inject IJSRuntime JS
+@inject ILogger<Import> Logger
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+@if (!Session.CanManage)
+{
+    <NotAuthorizedView />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+    <div style="max-width:1000px;margin:0 auto;padding:20px">
+
+        @if (!string.IsNullOrEmpty(msg))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">@msg</div>
+        }
+
+        <!-- DOSYA TÜRÜ SEÇİMİ -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:14px">
+            <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:4px">Veri Yükleme</div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:12px">Yüklenecek dosya türünü seçin — tarama ve işleme kuralları seçime göre değişir.</div>
+            <select @bind="selectedType" @bind:after="OnTypeChanged" disabled="@inputsLocked"
+                    style="width:100%;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600">
+                <option value="">— Dosya türü seçin —</option>
+                @foreach (var t in Types)
+                {
+                    <option value="@t.Key">@t.Title</option>
+                }
+            </select>
+            @if (inputsLocked)
+            {
+                <div style="font-size:11px;color:#f59e0b;margin-top:6px">⏳ İşlem/önizleme sürerken tür değiştirilemez.</div>
+            }
+        </div>
+
+        <!-- SEÇİLEN TÜRE ÖZEL DİNAMİK PANEL -->
+        @if (Selected is { } meta)
+        {
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:14px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                    <div style="font-size:15px;font-weight:600;color:#f1f5f9">@meta.Title</div>
+                    <div style="display:flex;gap:6px">
+                        <button @onclick="() => DownloadTemplate(meta.TemplateKey)" style="padding:3px 10px;background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">📥 Örnek Şablon İndir</button>
+                        @if (meta.Key == "target")
+                        {
+                            <button @onclick='() => Nav.NavigateTo("/periods")' style="padding:3px 10px;background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">+ Dönem Ekle</button>
+                        }
+                    </div>
+                </div>
+                <div style="font-size:11px;color:#64748b;margin-bottom:10px">@meta.Desc</div>
+
+                @* ── Türe özel parametreler ───────────────────────────── *@
+                @if (meta.Key == "target" || meta.Key == "pharmacyplan")
+                {
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                        <span style="font-size:12px;color:#94a3b8">Yıl:</span>
+                        <select @bind="targetYear" disabled="@inputsLocked" style="@SelStyle">
+                            @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--) { <option value="@y">@y</option> }
+                        </select>
+                    </div>
+                }
+                @if (meta.Key == "ruta" || meta.Key == "visitplan")
+                {
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                        <span style="font-size:12px;color:#94a3b8">Yıl:</span>
+                        <select @bind="periodYear" disabled="@inputsLocked" style="@SelStyle">
+                            @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--) { <option value="@y">@y</option> }
+                        </select>
+                        <span style="font-size:12px;color:#94a3b8">Çeyrek:</span>
+                        <select @bind="periodQuarter" disabled="@inputsLocked" style="@SelStyle">
+                            <option value="Q1">Q1 (Oca-Mar)</option>
+                            <option value="Q2">Q2 (Nis-Haz)</option>
+                            <option value="Q3">Q3 (Tem-Eyl)</option>
+                            <option value="Q4">Q4 (Eki-Ara)</option>
+                        </select>
+                    </div>
+                }
+
+                @* ── Üstüne Ekle / Sıfırla ────────────────────────────── *@
+                @if (meta.SupportsReplace)
+                {
+                    var mergeStyle = "flex:1;padding:7px;background:" + (!replaceMode ? "#3b82f6" : "#0a0f1a") + ";color:" + (!replaceMode ? "#fff" : "#64748b") + ";border:none;cursor:pointer;font-weight:600";
+                    var replStyle  = "flex:1;padding:7px;background:" + (replaceMode  ? "#ef4444" : "#0a0f1a") + ";color:" + (replaceMode  ? "#fff" : "#64748b") + ";border:none;cursor:pointer;font-weight:600";
+                    <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid #1e293b;border-radius:8px;overflow:hidden;font-size:12px">
+                        <button @onclick="() => replaceMode = false" style="@mergeStyle" disabled="@inputsLocked">🔄 Üstüne Ekle</button>
+                        <button @onclick="() => replaceMode = true"  style="@replStyle" disabled="@inputsLocked">@meta.ReplaceLabel</button>
+                    </div>
+                    @if (replaceMode)
+                    {
+                        <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+                            ⚠ Bu mod seçiliyken @meta.ReplaceScope ait mevcut tüm veri önce silinir, ardından dosyadaki veri eklenir.
+                        </div>
+                    }
+                }
+                @if (meta.Key == "visitplan")
+                {
+                    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+                        ⚠ Yükleme seçilen dönemin planını tamamen değiştirir.
+                    </div>
+                }
+
+                <div style="display:flex;align-items:center;gap:10px">
+                    <InputFile OnChange="@(e => PrepareImport(e, meta.Key))" accept=".xlsx,.xls" disabled="@inputsLocked" />
+                    @if (loading == meta.Key)
+                    {
+                        <span style="color:#f59e0b;font-size:12px">⏳ İşleniyor...</span>
+                    }
+                </div>
+
+                @if (pendingType == meta.Key && previewResult != null) { @PreviewCard }
+                @ResultBlock(result)
+            </div>
+        }
+
+        <!-- YÜKLEME KÜTÜPHANESİ -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:10px">📚 Yükleme Kütüphanesi
+                <span style="color:#64748b;font-weight:400;font-size:11px">— dosyalar saklanır; geçmiş bir dosyayı tek tıkla yeniden aktifleştirin (Değiştir/Üstüne Ekle)</span></div>
+            @if (!batches.Any())
+            {
+                <div style="color:#64748b;font-size:12px;text-align:center;padding:12px">Kütüphane boş — yeni yüklemeler buraya eklenir (tablo için <strong>db/import-batch.sql</strong> çalıştırılmalı)</div>
+            }
+            else
+            {
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                        <tr>
+                            @foreach (var h in new[] { "DURUM", "TİP", "MOD", "DOSYA", "SATIR", "TARİH", "İŞLEM" })
+                            {
+                                <th style="padding:6px 8px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in batches)
+                        {
+                            <tr @key="b.BatchId" style="border-bottom:1px solid #1e293b22">
+                                <td style="padding:6px 8px">
+                                    @if (b.IsActive)
+                                    {
+                                        <span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.15);color:#10b981">● AKTİF</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="padding:2px 7px;border-radius:4px;font-size:10px;background:rgba(100,116,139,0.12);color:#64748b">pasif</span>
+                                    }
+                                </td>
+                                <td style="padding:6px 8px;color:#f1f5f9">@b.FileType</td>
+                                <td style="padding:6px 8px"><span style="color:@(b.Mode == "Replace" ? "#ef4444" : "#3b82f6")">@(b.Mode == "Replace" ? "Değiştir" : "Üstüne Ekle")</span></td>
+                                <td style="padding:6px 8px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@b.FileName</td>
+                                <td style="padding:6px 8px;color:#f1f5f9;font-family:monospace">@(b.RowCount?.ToString("N0") ?? "—")</td>
+                                <td style="padding:6px 8px;color:#94a3b8">@b.UploadedAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
+                                <td style="padding:6px 8px;white-space:nowrap">
+                                    @if (!b.IsActive)
+                                    {
+                                        <button @onclick="() => ReactivateBatch(b.BatchId)" disabled="@inputsLocked" title="Bu dosyayı yeniden yükle (aktifle)"
+                                                style="padding:2px 10px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);cursor:pointer;margin-right:4px">↻ Aktifle</button>
+                                    }
+                                    <button @onclick="() => DeleteBatch(b.BatchId)" title="Kütüphaneden sil"
+                                            style="padding:2px 9px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(100,116,139,0.1);color:#64748b;border:1px solid rgba(100,116,139,0.3);cursor:pointer">×</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <!-- GEÇMİŞ -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px">
+            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:10px">Yükleme Geçmişi</div>
+            @if (!logs.Any())
+            {
+                <div style="color:#64748b;font-size:12px;text-align:center;padding:12px">Henüz yükleme yok</div>
+            }
+            else
+            {
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                        <tr>
+                            @foreach (var h in new[] { "TARİH", "TİP", "DOSYA", "SATIR", "GÜNCEL", "DURUM", "İŞLEM" })
+                            {
+                                <th style="padding:6px 8px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in logs)
+                        {
+                            var (bg, fg) = StatusColors(l.Status);
+                            <tr @key="l.LogId" style="border-bottom:1px solid #1e293b22">
+                                <td style="padding:6px 8px;color:#94a3b8">@l.ImportedAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
+                                <td style="padding:6px 8px;color:#f1f5f9">@l.FileType</td>
+                                <td style="padding:6px 8px;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@l.FileName</td>
+                                <td style="padding:6px 8px;color:#f1f5f9;font-family:monospace">@(l.ImportRowCount?.ToString("N0") ?? "—")</td>
+                                <td style="padding:6px 8px;color:#f59e0b;font-family:monospace">@((l.ReplacedCount ?? 0).ToString("N0"))</td>
+                                <td style="padding:6px 8px">
+                                    <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;background:@bg;color:@fg">@l.Status</span>
+                                </td>
+                                <td style="padding:6px 8px;white-space:nowrap">
+                                    @if (confirmRollbackId == l.LogId)
+                                    {
+                                        <span style="font-size:11px;color:#ef4444;margin-right:6px">Geri alınsın mı?</span>
+                                        <button @onclick="() => Rollback(l.LogId)" disabled="@rollbackBusy" style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);cursor:pointer">@(rollbackBusy ? "..." : "Evet")</button>
+                                        <button @onclick="() => confirmRollbackId = null" style="padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(100,116,139,0.1);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);cursor:pointer">Vazgeç</button>
+                                    }
+                                    else
+                                    {
+                                        @if (!string.IsNullOrEmpty(l.ValidationErrors))
+                                        {
+                                            <button @onclick="() => expandedLogId = expandedLogId == l.LogId ? null : l.LogId" title="Atlanan satır detayları"
+                                                    style="padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);cursor:pointer;margin-right:4px">≣</button>
+                                        }
+                                        @if (l.Status is "Success" or "Partial")
+                                        {
+                                            <button @onclick="() => confirmRollbackId = l.LogId" title="İçe aktarmayı geri al"
+                                                    style="padding:2px 10px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);cursor:pointer">×</button>
+                                        }
+                                        else
+                                        {
+                                            <button @onclick="() => DeleteLog(l.LogId)" disabled="@rollbackBusy" title="Log kaydını sil"
+                                                    style="padding:2px 10px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(100,116,139,0.1);color:#64748b;border:1px solid rgba(100,116,139,0.3);cursor:pointer">×</button>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                            @if (expandedLogId == l.LogId && !string.IsNullOrEmpty(l.ValidationErrors))
+                            {
+                                <tr>
+                                    <td colspan="7" style="padding:8px 12px;background:rgba(245,158,11,0.05)">
+                                        <div style="max-height:140px;overflow-y:auto;font-size:11px;color:#f59e0b">
+                                            @foreach (var err in DeserializeErrors(l.ValidationErrors))
+                                            {
+                                                <div>⚠ @err</div>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // Dosya türü meta tablosu — UI ve işleme kuralları buradan sürülür
+    private record TypeMeta(string Key, string Title, string TemplateKey, string Desc,
+                           bool SupportsReplace, string ReplaceLabel, string ReplaceScope);
+
+    private static readonly List<TypeMeta> Types = new()
+    {
+        new("sellout",   "Sell-Out (DistInvTran)", "SellOut",
+            "Yıl · Ay · İl · İlçe · Brick · Kurum GLN · Kurum · Marka · Toplam KUTU · Ana Mal TL · MF TL — GLN kırılımlı; brick+marka düzeyinde toplanır",
+            true, "🗑 Dönemi Sıfırla", "dosyadaki dönemlere"),
+        new("order",     "Sipariş (SalesOrder)", "Siparis",
+            "Yıl · Ay · Ana Depo · Brick · Personel · Marka · Toplam Kutu · Ana Mal TL · MF TL · Kurum Adedi",
+            true, "🗑 Dönemi Sıfırla", "dosyadaki dönemlere"),
+        new("target",    "Hedef (Target)", "Hedef",
+            "Ay · Mümessil · Brick · Ürün Grubu · Ürün · Hedef Adet — Dönemler yoksa satırlar atlanır",
+            true, "🗑 Yılı Sıfırla", "seçilen yıla"),
+        new("ruta",      "Ruta Uyum", "Ruta",
+            "Personel · Planlanan Ziyaret · Gerçekleşen Ziyaret",
+            true, "🗑 Dönemi Sıfırla", "seçilen döneme"),
+        new("visitplan", "Ziyaret Planı", "ZiyaretPlani",
+            "Bölge · ST · Tarih · Brick · GLN — Strike Rate hesabı için Q bazlı plan",
+            false, "", ""),
+        new("pharmacyplan", "Eczane Planı (UTT_Brick)", "EczanePlani",
+            "Çalışan ÜTT · Brick · Segment · Kurum · GLN · Frek. · Plan · Ziyaret — ziyaret planına ALINMIŞ eczaneleri işaretler (ECZANE sayfası). Analizde planlı/plansız ayrımı için; prim skoruna GİRMEZ.",
+            true, "🗑 Yılı Sıfırla", "seçilen yıla"),
+        new("productmap","Ürün-Marka Eşleştirme (Barkod-Product)", "UrunMarka",
+            "Barkod · Marka · Ürün · Product · Urun Grubu — InfiniLens markalarını kanonik prim ürün adına bağlar + ürün grubunu (ITR/OTC) senkronlar (eşleşme alias master'ı)",
+            false, "", ""),
+        new("brickmap",  "Brick–ST Ataması (N_St_Brick)", "BrickAtama",
+            "Brick · Mümessil — Otoriter brick→ST haritası. Hedef ve gerçekleşen aynı haritadan atfedilir. 'Tümünü Sıfırla' ile dosyada olmayan tüm aktif atamalar pasiflenir.",
+            true, "🗑 Tümünü Sıfırla", "tüm aktif brick→ST atamalarına"),
+    };
+
+    private TypeMeta? Selected => Types.FirstOrDefault(t => t.Key == selectedType);
+    private string SelStyle => "background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:12px";
+
+    private string selectedType = "";
+    private ImportResult? result;
+    private string loading = "";
+    private List<ImportLog> logs = new();
+    private List<ImportBatch> batches = new();
+    private string msg = "";
+
+    private int targetYear = DateTime.Now.Year;
+    private int periodYear = DateTime.Now.Year;
+    private string periodQuarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+
+    // Tek aktif tür → tek replace bayrağı
+    private bool replaceMode = false;
+
+    // İki aşamalı yükleme: önce dry-run önizleme, onay sonrası gerçek import
+    private byte[]? pendingBytes;
+    private string pendingFileName = "";
+    private string pendingType = "";
+    private ImportResult? previewResult;
+
+    private int? confirmRollbackId;
+    private int? expandedLogId;
+    private bool _sessionChecked = false;
+
+    // İşlem veya bekleyen önizleme varken tür/girişler kilitlenir (çift yükleme koruması)
+    private bool inputsLocked => loading != "" || pendingBytes != null;
+
+    protected override async Task OnInitializedAsync() { await LoadLogs(); await LoadBatches(); }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            StateHasChanged();
+        }
+    }
+
+    // Tür değişince bekleyen önizleme/sonuç temizlenir, replace bayrağı sıfırlanır
+    private void OnTypeChanged()
+    {
+        if (inputsLocked) return;
+        ClearPending();
+        result = null;
+        replaceMode = false;
+    }
+
+    private async Task LoadLogs()
+    {
+        using var db = DbFactory.CreateDbContext();
+        logs = await db.ImportLogs.OrderByDescending(l => l.ImportedAt).Take(50).ToListAsync();
+    }
+
+    // ── Yükleme Kütüphanesi ──────────────────────────────────────────────────
+    private async Task LoadBatches()
+    {
+        try { batches = await ImportSvc.GetBatchesAsync(null, Session.RequireUserId()); }
+        catch (Exception ex) { Logger.LogWarning(ex, "LoadBatches başarısız"); batches = new(); }
+    }
+
+    private async Task ReactivateBatch(int batchId)
+    {
+        if (loading != "" || pendingBytes != null) return;
+        loading = "reactivate"; StateHasChanged();
+        try
+        {
+            result = await ImportSvc.ReactivateBatchAsync(batchId, Session.RequireUserId());
+            await LoadLogs();
+            await LoadBatches();
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); return; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Yeniden aktifleştirme hatası (batch {BatchId})", batchId);
+            result = new ImportResult { Error = "Yeniden yükleme başarısız: " + ex.Message };
+        }
+        loading = ""; StateHasChanged();
+    }
+
+    private async Task DeleteBatch(int batchId)
+    {
+        try { await ImportSvc.DeleteBatchAsync(batchId, Session.RequireUserId()); await LoadBatches(); }
+        catch (Exception ex) { Logger.LogWarning(ex, "DeleteBatch başarısız (batch {BatchId})", batchId); }
+        StateHasChanged();
+    }
+
+    private const long MaxUploadBytes = 20 * 1024 * 1024; // 20 MB (GLN kırılımlı sell-out büyük)
+
+    private static bool IsValidExcel(IBrowserFile f)
+    {
+        if (f.Size > MaxUploadBytes) return false;
+        var ext = System.IO.Path.GetExtension(f.Name).ToLowerInvariant();
+        return ext is ".xlsx" or ".xls";
+    }
+
+    private static ImportResult InvalidFileResult() =>
+        new() { Error = "Sadece .xlsx/.xls dosyaları kabul edilir, maks 20 MB." };
+
+    private static (string Bg, string Fg) StatusColors(string status) => status switch
+    {
+        "Success" => ("rgba(16,185,129,0.12)", "#10b981"),
+        "Partial" => ("rgba(245,158,11,0.12)", "#f59e0b"),
+        _         => ("rgba(239,68,68,0.1)",  "#ef4444")
+    };
+
+    private static List<string> DeserializeErrors(string json)
+    {
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? new(); }
+        catch { return new() { json }; }
+    }
+
+    // ── Aşama 1: dosya seç → dry-run önizleme ────────────────────────────────
+    private async Task PrepareImport(InputFileChangeEventArgs e, string type)
+    {
+        if (inputsLocked) return;
+        if (!IsValidExcel(e.File)) { result = InvalidFileResult(); StateHasChanged(); return; }
+        loading = type; previewResult = null; result = null; StateHasChanged();
+        try
+        {
+            using var ms = new MemoryStream();
+            await using (var stream = e.File.OpenReadStream(MaxUploadBytes))
+                await stream.CopyToAsync(ms);
+            pendingBytes = ms.ToArray();
+            pendingFileName = e.File.Name;
+            pendingType = type;
+
+            previewResult = await RunImport(type, dryRun: true);
+            if (previewResult?.Success != true)
+            {
+                // Şablon uymuyor / dosya boş vb. — önizleme iptal, hata panelde gösterilir
+                result = previewResult;
+                ClearPending();
+            }
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); return; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Import önizleme hatası ({Type})", type);
+            result = new ImportResult { Error = "İşlem başarısız oldu. Lütfen tekrar deneyin." };
+            ClearPending();
+        }
+        loading = "";
+        StateHasChanged();
+    }
+
+    // ── Aşama 2: kullanıcı onayı → gerçek import ─────────────────────────────
+    private async Task ConfirmPending()
+    {
+        if (pendingBytes == null || loading != "") return;
+        var type = pendingType;
+        loading = type; StateHasChanged();
+        try
+        {
+            result = await RunImport(type, dryRun: false);
+            await LoadLogs();
+            if (result.Success && pendingBytes != null)
+            {
+                int? regYear = type is "target" or "pharmacyplan" ? targetYear : (type is "ruta" or "visitplan" ? periodYear : (int?)null);
+                string? regQuarter = type is "ruta" or "visitplan" ? periodQuarter : null;
+                string mode = replaceMode ? "Replace" : "Append";
+                try
+                {
+                    await ImportSvc.RegisterBatchAsync(type, pendingFileName, result.FileHash, pendingBytes, mode,
+                        regYear, regQuarter, result.InsertedRows + result.UpdatedRows, result.FileTotal, Session.RequireUserId());
+                    await LoadBatches();
+                }
+                catch (Exception ex) { Logger.LogWarning(ex, "RegisterBatch başarısız ({Type})", type); }
+            }
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); return; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Import hatası ({Type})", type);
+            result = new ImportResult { Error = "İşlem başarısız oldu. Lütfen tekrar deneyin." };
+        }
+        ClearPending();
+        loading = "";
+        StateHasChanged();
+    }
+
+    private void CancelPending()
+    {
+        ClearPending();
+        StateHasChanged();
+    }
+
+    private async Task<ImportResult> RunImport(string type, bool dryRun)
+    {
+        using var ms = new MemoryStream(pendingBytes!);
+        return type switch
+        {
+            "sellout"    => await ImportSvc.ImportSellOutAsync(ms, pendingFileName, Session.RequireUserId(), replaceMode, dryRun),
+            "order"      => await ImportSvc.ImportOrdersAsync(ms, pendingFileName, Session.RequireUserId(), replaceMode, dryRun),
+            "target"     => await ImportSvc.ImportTargetsAsync(ms, pendingFileName, Session.RequireUserId(), targetYear, replaceMode, dryRun),
+            "ruta"       => await ImportSvc.ImportRutaAsync(ms, pendingFileName, Session.RequireUserId(), periodYear, periodQuarter, replaceMode, dryRun),
+            "visitplan"  => await ImportSvc.ImportVisitPlanAsync(ms, pendingFileName, Session.RequireUserId(), periodYear, periodQuarter, dryRun),
+            "pharmacyplan" => await ImportSvc.ImportPharmacyPlanAsync(ms, pendingFileName, Session.RequireUserId(), targetYear, replaceMode, dryRun),
+            "productmap" => await ImportSvc.ImportProductMapAsync(ms, pendingFileName, Session.RequireUserId(), dryRun),
+            "brickmap"   => await ImportSvc.ImportBrickAssignmentsAsync(ms, pendingFileName, Session.RequireUserId(), replaceMode, dryRun),
+            _            => new ImportResult { Error = "Bilinmeyen içe aktarma tipi" }
+        };
+    }
+
+    private void ClearPending()
+    {
+        pendingBytes = null;
+        pendingFileName = "";
+        pendingType = "";
+        previewResult = null;
+        aliasMsg = null;
+    }
+
+    // ── Tek-tık eşleme: öneriyi kalıcılaştır + önizlemeyi yenile ──────────────
+    private bool savingAlias;
+    private string? aliasMsg;
+
+    private static string TypeLabel(string t) => t switch
+    {
+        "Brick" => "Brick", "User" => "ST", "Product" => "Ürün", _ => t
+    };
+
+    private async Task AcceptSuggestion(MatchSuggestion s)
+    {
+        if (savingAlias || pendingBytes == null) return;
+        savingAlias = true; aliasMsg = null; StateHasChanged();
+        try
+        {
+            await ImportSvc.SaveMatchAliasAsync(s.Type, s.Source, s.TargetId, Session.RequireUserId());
+            // Önizlemeyi yeniden çalıştır: yeni alias haritaya girer, öneri/kapsam güncellenir.
+            previewResult = await RunImport(pendingType, dryRun: true);
+            aliasMsg = $"✓ '{s.Source}' → {s.Suggestion} hatırlandı, önizleme yenilendi.";
+        }
+        catch (Exception ex)
+        {
+            aliasMsg = "Hata: " + ex.Message;
+            Logger.LogWarning(ex, "SaveMatchAlias başarısız: {Type} {Source}", s.Type, s.Source);
+        }
+        finally { savingAlias = false; StateHasChanged(); }
+    }
+
+    // ── Önizleme kartı (dry-run sonucu + kapsam kapısı + onay/iptal) ──────────
+    private RenderFragment PreviewCard => @<div style="margin-top:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;margin-bottom:8px">🔍 Önizleme — @pendingFileName</div>
+        @if (previewResult!.DuplicateOf != null)
+        {
+            <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:7px;padding:8px 12px;margin-bottom:8px;color:#f59e0b;font-size:12px">
+                ⚠ Bu dosya (aynı içerikle) <strong>@previewResult.DuplicateOf.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</strong> tarihinde zaten yüklenmiş.
+            </div>
+        }
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
+            <span style="color:#94a3b8">@previewResult.TotalRows satır okundu</span>
+            <span style="color:#10b981">@previewResult.InsertedRows @(pendingType == "productmap" ? "ürün alias alacak" : "yeni eklenecek")</span>
+            @if (pendingType != "productmap")
+            {
+                <span style="color:#3b82f6">@previewResult.UpdatedRows güncellenecek</span>
+            }
+            <span style="color:@(previewResult.SkippedRows > 0 ? "#f59e0b" : "#64748b")">@previewResult.SkippedRows atlanacak</span>
+            @if (previewResult.FileTotal.HasValue)
+            {
+                <span style="color:#94a3b8">toplam: @previewResult.FileTotal.Value.ToString("N0")</span>
+            }
+            @if (previewResult.DetailRowCount > 0)
+            {
+                <span style="color:#94a3b8">@previewResult.DetailRowCount.ToString("N0") GLN detay</span>
+            }
+        </div>
+
+        @* ── Eşleşme kapsamı (double-check) ─────────────────────────── *@
+        @if (previewResult.TotalBrandCount > 0 || previewResult.TotalBrickCount > 0 || previewResult.TotalPeriodCount > 0)
+        {
+            <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;padding:8px 12px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.2);border-radius:7px">
+                <span style="color:#94a3b8;font-weight:600">Eşleşme:</span>
+                @if (previewResult.TotalBrandCount > 0)
+                {
+                    <span style="color:@(previewResult.UnmatchedBrands.Any() ? "#f59e0b" : "#10b981")">Marka @previewResult.MatchedBrandCount/@previewResult.TotalBrandCount</span>
+                }
+                @if (previewResult.TotalBrickCount > 0)
+                {
+                    <span style="color:@(previewResult.MatchedBrickCount < previewResult.TotalBrickCount ? "#f59e0b" : "#10b981")">Brick @previewResult.MatchedBrickCount/@previewResult.TotalBrickCount</span>
+                }
+                @if (previewResult.TotalPeriodCount > 0)
+                {
+                    <span style="color:@(previewResult.MatchedPeriodCount < previewResult.TotalPeriodCount ? "#f59e0b" : "#10b981")">Dönem @previewResult.MatchedPeriodCount/@previewResult.TotalPeriodCount</span>
+                }
+            </div>
+        }
+
+        @* ── Hedef: atanmamış satır özeti (— / BRICK ATANMAMIŞ) ───────── *@
+        @if (previewResult.UnassignedTargetRows > 0)
+        {
+            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+                ⚠ <strong>@previewResult.UnassignedTargetRows.ToString("N0") satır atanmamış</strong> (Mümessil '—' / Brick '(BRICK ATANMAMIŞ)') —
+                toplam <strong>@previewResult.UnassignedTargetQty.ToString("N0")</strong> hedef hiçbir ST'ye düşmez (skora dahil edilmez).
+            </div>
+        }
+
+        @* ── Eczane planı: GLN'i boş satırlar ─────────────────────────── *@
+        @if (previewResult.BlankGlnRows > 0)
+        {
+            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+                ⚠ <strong>@previewResult.BlankGlnRows.ToString("N0") satırın GLN'i boş</strong> — eşleşemediği için işaretlenmeyecek.
+                Kaynak raporda düzeltilmesi gereken bir veri kalitesi sorunu.
+            </div>
+        }
+
+        @* ── Brick→ST haritası senkronu (Hedef/Brick importu) ─────────── *@
+        @if (previewResult.BrickAssignmentsSynced > 0 || previewResult.BrickAssignmentsDeactivated > 0)
+        {
+            <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#93c5fd;font-size:12px">
+                🗺 Brick→ST haritası: <strong>@previewResult.BrickAssignmentsSynced</strong> atama yazılacak/güncellenecek@(previewResult.BrickAssignmentsDeactivated > 0 ? $", {previewResult.BrickAssignmentsDeactivated} eski/çakışan atama pasiflenecek" : "").
+                Hedef ve gerçekleşen bu haritadan hesaplanır.
+            </div>
+        }
+
+        @* ── KAPI: eşleşmeyen marka → satış skora yansımaz ──────────── *@
+        @if (previewResult.UnmatchedBrands.Any())
+        {
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#ef4444;font-size:12px">
+                ⛔ <strong>Eşleşmeyen marka(lar)</strong> — bu satırlar atlanır, satış skora <strong>YANSIMAZ</strong>:
+                <div style="color:#fca5a5;margin-top:4px">@string.Join(", ", previewResult.UnmatchedBrands.Take(20))@(previewResult.UnmatchedBrands.Count > 20 ? $" (+{previewResult.UnmatchedBrands.Count - 20})" : "")</div>
+                <div style="color:#94a3b8;margin-top:4px">Çözüm: <strong>"Ürün-Marka Eşleştirme"</strong> dosyasını yükleyip alias ekleyin, sonra tekrar deneyin.</div>
+            </div>
+        }
+
+        @* ── Bulanık eşleşme önerileri ("bunu mu demek istediniz") + tek-tık eşle ── *@
+        @if (previewResult.MatchSuggestions.Any())
+        {
+            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:12px">
+                <div style="color:#f59e0b;font-weight:600;margin-bottom:6px">🔎 Eşleşmeyen değerler için olası karşılıklar (tek tıkla eşle &amp; hatırla):</div>
+                @foreach (var s in previewResult.MatchSuggestions.Take(20))
+                {
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
+                        <span style="color:#fcd34d;flex:1">@TypeLabel(s.Type): <strong>@s.Source</strong> → @s.Suggestion</span>
+                        <button class="btn-secondary" style="padding:2px 10px;font-size:11px" disabled="@savingAlias"
+                                @onclick="() => AcceptSuggestion(s)">✓ Eşle</button>
+                    </div>
+                }
+                <div style="color:#94a3b8;margin-top:6px">Eşlersen kaynak adı bu karşılığa "hatırlanır"; sonraki yüklemelerde otomatik eşleşir.</div>
+                @if (aliasMsg != null) { <div style="color:@(aliasMsg.StartsWith("Hata") ? "#fca5a5" : "#10b981");margin-top:4px">@aliasMsg</div> }
+            </div>
+        }
+
+        @* ── Ürün-Marka alias atama önizlemesi ─────────────────────── *@
+        @if (previewResult.ProductMapPreview.Any())
+        {
+            <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;max-height:160px;overflow-y:auto">
+                <div style="color:#94a3b8;font-weight:600;margin-bottom:4px">Atanacak alias'lar (Kanonik Ürün ← Marka):</div>
+                @foreach (var line in previewResult.ProductMapPreview.Take(40)) { <div style="color:#cbd5e1">• @line</div> }
+                @if (previewResult.ProductMapPreview.Count > 40) { <div style="color:#64748b">… +@(previewResult.ProductMapPreview.Count - 40) ürün daha</div> }
+            </div>
+        }
+
+        @if (previewResult.Errors.Any())
+        {
+            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:11px;max-height:100px;overflow-y:auto">
+                @foreach (var e in previewResult.Errors.Take(10)) { <div>⚠ @e</div> }
+                @if (previewResult.Errors.Count > 10) { <div style="color:#94a3b8">… +@(previewResult.Errors.Count - 10) uyarı daha (yükleme sonrası geçmişten görülebilir)</div> }
+            </div>
+        }
+        <div style="display:flex;gap:8px">
+            <button @onclick="ConfirmPending" disabled="@(loading != "")"
+                    style="padding:8px 18px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+                ✅ Onayla ve Yükle
+            </button>
+            <button @onclick="CancelPending" disabled="@(loading != "")"
+                    style="padding:8px 18px;background:rgba(100,116,139,0.15);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:8px;font-size:13px;cursor:pointer">
+                ✖ İptal
+            </button>
+        </div>
+    </div>;
+
+    // ── Sonuç bloğu (başarı + teyit + uyarılar + hata) ───────────────────────
+    private RenderFragment? ResultBlock(ImportResult? r)
+    {
+        if (r == null) return null;
+        return @<div>
+            @if (r.Success && !r.IsDryRun)
+            {
+                <div style="margin-top:8px;color:#10b981;font-size:12px">✓ @r.InsertedRows yeni · @r.UpdatedRows güncellendi · @r.SkippedRows atlandı · @r.ProcessingMs ms</div>
+                @if (r.DetailRowCount > 0)
+                {
+                    <div style="margin-top:4px;color:#94a3b8;font-size:12px">📦 @r.DetailRowCount.ToString("N0") GLN/kurum detay satırı kaydedildi</div>
+                }
+                @if (r.Verified == true)
+                {
+                    <div style="margin-top:4px;color:#10b981;font-size:12px">
+                        ✅ Teyit: @r.VerifiedCount/@r.ExpectedCount satır DB'de@(r.FileTotal.HasValue ? $" · toplam {r.DbTotal:N0} birebir eşleşti" : "")
+                    </div>
+                }
+                else if (r.Verified == false)
+                {
+                    <div style="margin-top:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:7px;padding:8px 12px;color:#ef4444;font-size:12px">
+                        ⚠ TEYİT BAŞARISIZ — beklenen @r.ExpectedCount satır, DB'de @r.VerifiedCount bulundu@(r.FileTotal.HasValue ? $" (dosya toplamı {r.FileTotal:N0}, DB toplamı {r.DbTotal:N0})" : "").
+                        Yükleme Geçmişi'nden bu içe aktarmayı geri alıp tekrar deneyin.
+                    </div>
+                }
+                @if (r.DetailConsistent == false)
+                {
+                    <div style="margin-top:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:7px;padding:8px 12px;color:#ef4444;font-size:12px">
+                        ⚠ GLN detay toplamı brick toplamıyla uyuşmuyor — veriyi geri alıp tekrar yükleyin.
+                    </div>
+                }
+                @if (r.BrickAssignmentsSynced > 0 || r.BrickAssignmentsDeactivated > 0)
+                {
+                    <div style="margin-top:4px;color:#93c5fd;font-size:12px">🗺 Brick→ST: @r.BrickAssignmentsSynced atama yazıldı@(r.BrickAssignmentsDeactivated > 0 ? $", {r.BrickAssignmentsDeactivated} eski/çakışan pasiflendi" : "")</div>
+                }
+                @if (r.UnassignedTargetRows > 0)
+                {
+                    <div style="margin-top:4px;color:#f59e0b;font-size:12px">⚠ @r.UnassignedTargetRows.ToString("N0") atanmamış satır (toplam @r.UnassignedTargetQty.ToString("N0") hedef) hiçbir ST'ye düşmedi</div>
+                }
+                @if (r.BlankGlnRows > 0)
+                {
+                    <div style="margin-top:4px;color:#f59e0b;font-size:12px">⚠ @r.BlankGlnRows.ToString("N0") satırın GLN'i boştu — işaretlenmedi</div>
+                }
+            }
+            @if (r.Errors.Any())
+            {
+                <div style="margin-top:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;color:#f59e0b;font-size:11px;max-height:100px;overflow-y:auto">
+                    @foreach (var e in r.Errors.Take(8)) { <div>⚠ @e</div> }
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(r.Error))
+            {
+                <div style="margin-top:8px;color:#ef4444;font-size:12px">❌ @r.Error</div>
+            }
+        </div>;
+    }
+
+    private bool rollbackBusy;
+
+    private async Task Rollback(int logId)
+    {
+        if (rollbackBusy) return;                 // çift-tık koruması (yavaş silmede yarış → çökme)
+        rollbackBusy = true; confirmRollbackId = null; StateHasChanged();
+        try { msg = await ImportSvc.RollbackImportAsync(logId, Session.RequireUserId()); }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); return; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Rollback hatası (log {LogId})", logId);
+            msg = "Geri alma başarısız: " + ex.Message;
+        }
+        finally { rollbackBusy = false; }
+        await LoadLogs(); StateHasChanged();
+        await Task.Delay(3000); msg = ""; StateHasChanged();
+    }
+
+    private async Task DeleteLog(int logId)
+    {
+        if (rollbackBusy) return;
+        rollbackBusy = true; StateHasChanged();
+        try { msg = await ImportSvc.DeleteLogAsync(logId, Session.RequireUserId()); }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); return; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "DeleteLog hatası (log {LogId})", logId);
+            msg = "Silme başarısız: " + ex.Message;
+        }
+        finally { rollbackBusy = false; }
+        await LoadLogs(); StateHasChanged();
+        await Task.Delay(2000); msg = ""; StateHasChanged();
+    }
+
+    private async Task DownloadTemplate(string type)
+    {
+        var bytes = ExportSvc.GetImportTemplate(type);
+        await JS.InvokeVoidAsync("downloadBytes", $"sablon_{type}.xlsx", bytes);
+    }
+}

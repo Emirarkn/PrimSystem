@@ -1,0 +1,333 @@
+@page "/activity"
+@using PrimSystem.Data
+@using PrimSystem.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject CalculationService CalcSvc
+@inject SessionState Session
+@inject IJSRuntime JS
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+
+@if (!Session.CanViewAll)
+{
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0f1a;color:#64748b;font-size:14px">
+        Bu sayfaya erişim yetkiniz yok.
+    </div>
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+    <div style="max-width:1280px;margin:0 auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+
+        <!-- BAŞLIK + FİLTRELER -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">📈 Satış Etkinliği Analizi</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px">Trend, ST aktivitesi ve bölge × ürün karşılaştırması</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <select @bind="selectedYear" @bind:after="LoadData" style="padding:6px 10px;background:#111827;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--)
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+                <select @bind="selectedQuarter" @bind:after="LoadData" style="padding:6px 10px;background:#111827;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                </select>
+                <select @bind="selectedProductIdStr" @bind:after="LoadData" style="padding:6px 10px;background:#111827;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;max-width:240px">
+                    <option value="">Tüm Ürünler</option>
+                    @foreach (var p in activeProducts)
+                    {
+                        <option value="@p.ProductId">@p.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding:40px;text-align:center;color:#64748b;font-size:13px">Yükleniyor...</div>
+        }
+        else
+        {
+            <!-- ÖZET KARTLAR -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Toplam Kutu (@selectedQuarter)</div>
+                    <div style="font-size:20px;font-weight:700;color:#10b981;margin-top:4px">@FormatNum(qBoxes)</div>
+                </div>
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Toplam TL (@selectedQuarter)</div>
+                    <div style="font-size:20px;font-weight:700;color:#3b82f6;margin-top:4px">@FormatTL(qTL)</div>
+                </div>
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Aktif ST</div>
+                    <div style="font-size:20px;font-weight:700;color:#f59e0b;margin-top:4px">@stActivity.Count</div>
+                </div>
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Aktif Brick</div>
+                    <div style="font-size:20px;font-weight:700;color:#a78bfa;margin-top:4px">@stActivity.Sum(s => s.BrickCount)</div>
+                </div>
+            </div>
+
+            <!-- BÖLÜM 1: AYLIK TREND -->
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:13px;font-weight:700;color:#f1f5f9">@selectedYear Aylık Trend</div>
+                    <div style="font-size:10px;color:#64748b">Yıl genelinde kutu ve TL akışı</div>
+                </div>
+                @if (trend.Any())
+                {
+                    <canvas id="trendChart" style="max-height:280px"></canvas>
+                }
+                else
+                {
+                    <div style="padding:30px;text-align:center;color:#64748b;font-size:12px">Bu yıl için sipariş verisi yok.</div>
+                }
+            </div>
+
+            <!-- BÖLÜM 2: ST AKTİVİTE TABLOSU -->
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+                <div style="padding:14px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+                    <div style="font-size:13px;font-weight:700;color:#f1f5f9">ST Aktivite Metrikleri</div>
+                    <div style="font-size:10px;color:#64748b">@selectedQuarter @selectedYear · @stActivity.Count ST</div>
+                </div>
+                @if (!stActivity.Any())
+                {
+                    <div style="padding:30px;text-align:center;color:#64748b;font-size:12px">Bu dönemde sipariş veren ST yok.</div>
+                }
+                else
+                {
+                    <div style="overflow-x:auto">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px">
+                            <thead>
+                                <tr style="background:#171f2e">
+                                    <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ST</th>
+                                    <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BÖLGE</th>
+                                    <th style="padding:10px 14px;text-align:right;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BRICK</th>
+                                    <th style="padding:10px 14px;text-align:right;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ÜRÜN ÇEŞİTLİLİĞİ</th>
+                                    <th style="padding:10px 14px;text-align:right;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">KUTU</th>
+                                    <th style="padding:10px 14px;text-align:right;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">TL</th>
+                                    <th style="padding:10px 14px;text-align:right;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">KURUM</th>
+                                    <th style="padding:10px 14px;text-align:right;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">KUTU/KURUM</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var maxBoxes = stActivity.Max(s => s.TotalBoxes); var maxBrick = stActivity.Max(s => s.BrickCount); var maxProd = stActivity.Max(s => s.ProductDiversity); }
+                                @foreach (var st in stActivity)
+                                {
+                                    <tr style="border-bottom:1px solid #1e293b22">
+                                        <td style="padding:8px 14px;color:#f1f5f9;font-weight:500">@st.FullName</td>
+                                        <td style="padding:8px 14px;color:#94a3b8">@st.Region</td>
+                                        <td style="padding:8px 14px;text-align:right;color:@ActivityColor(st.BrickCount, maxBrick)">@st.BrickCount</td>
+                                        <td style="padding:8px 14px;text-align:right;color:@ActivityColor(st.ProductDiversity, maxProd)">@st.ProductDiversity</td>
+                                        <td style="padding:8px 14px;text-align:right;color:@ActivityColor((int)st.TotalBoxes, (int)maxBoxes);font-weight:600">@FormatNum(st.TotalBoxes)</td>
+                                        <td style="padding:8px 14px;text-align:right;color:#94a3b8">@FormatTL(st.TotalTL)</td>
+                                        <td style="padding:8px 14px;text-align:right;color:#94a3b8">@st.TotalInstitutions</td>
+                                        <td style="padding:8px 14px;text-align:right;color:#cbd5e1">@st.BoxPerInstitution.ToString("N1")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <!-- BÖLÜM 3: BÖLGE × ÜRÜN KARŞILAŞTIRMA -->
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:13px;font-weight:700;color:#f1f5f9">Bölge × Ürün Karşılaştırma</div>
+                    <div style="font-size:10px;color:#64748b">Top @TopProductCount ürün · stacked bar</div>
+                </div>
+                @if (regionProduct.Any())
+                {
+                    <canvas id="regionProductChart" style="max-height:320px"></canvas>
+                }
+                else
+                {
+                    <div style="padding:30px;text-align:center;color:#64748b;font-size:12px">Karşılaştırma için yeterli veri yok.</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private int selectedYear = DateTime.Now.Year;
+    private string selectedQuarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+    private string selectedProductIdStr = "";
+    private int? selectedProductId => int.TryParse(selectedProductIdStr, out var id) ? id : null;
+
+    private List<Product> activeProducts = new();
+    private List<ActivityTrendPoint> trend = new();
+    private List<STActivityRow> stActivity = new();
+    private List<RegionProductCell> regionProduct = new();
+    private const int TopProductCount = 5;
+
+    private decimal qBoxes => stActivity.Sum(s => s.TotalBoxes);
+    private decimal qTL => stActivity.Sum(s => s.TotalTL);
+
+    private bool isLoading = true;
+    private bool _sessionChecked = false;
+    private bool _needsChartRender = false;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            StateHasChanged();
+            return;
+        }
+        if (_needsChartRender)
+        {
+            _needsChartRender = false;
+            await RenderCharts();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            activeProducts = await db.Products
+                .Where(p => p.IsActive && p.IsPrimEligible)
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
+                .ToListAsync();
+
+            var pid = selectedProductId;
+            trend = await CalcSvc.GetActivityTrendAsync(selectedYear, pid);
+            stActivity = await CalcSvc.GetSTActivityMetricsAsync(selectedYear, selectedQuarter, pid);
+            regionProduct = await CalcSvc.GetRegionProductMatrixAsync(selectedYear, selectedQuarter);
+        }
+        finally
+        {
+            isLoading = false;
+            _needsChartRender = true;
+        }
+    }
+
+    private async Task RenderCharts()
+    {
+        if (trend.Any())
+        {
+            var months = new[] { "Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara" };
+            var boxData = Enumerable.Range(1, 12).Select(m => trend.FirstOrDefault(t => t.Month == m)?.TotalBoxes ?? 0m).ToArray();
+            var tlData = Enumerable.Range(1, 12).Select(m => trend.FirstOrDefault(t => t.Month == m)?.TotalTL ?? 0m).ToArray();
+
+            await JS.InvokeVoidAsync("renderChart", "trendChart", new
+            {
+                type = "line",
+                data = new
+                {
+                    labels = months,
+                    datasets = new object[]
+                    {
+                        new {
+                            label = "Toplam Kutu",
+                            data = boxData,
+                            borderColor = "rgba(16,185,129,1)",
+                            backgroundColor = "rgba(16,185,129,0.15)",
+                            yAxisID = "y",
+                            tension = 0.3,
+                            fill = true
+                        },
+                        new {
+                            label = "Toplam TL",
+                            data = tlData,
+                            borderColor = "rgba(59,130,246,1)",
+                            backgroundColor = "rgba(59,130,246,0.1)",
+                            yAxisID = "y1",
+                            tension = 0.3,
+                            fill = false
+                        }
+                    }
+                },
+                options = new
+                {
+                    responsive = true,
+                    interaction = new { mode = "index", intersect = false },
+                    plugins = new
+                    {
+                        legend = new { labels = new { color = "#cbd5e1", font = new { size = 11 } } }
+                    },
+                    scales = new
+                    {
+                        x = new { ticks = new { color = "#94a3b8" }, grid = new { color = "rgba(255,255,255,0.04)" } },
+                        y = new { position = "left", ticks = new { color = "#10b981" }, grid = new { color = "rgba(255,255,255,0.04)" }, title = new { display = true, text = "Kutu", color = "#10b981" } },
+                        y1 = new { position = "right", ticks = new { color = "#3b82f6" }, grid = new { drawOnChartArea = false }, title = new { display = true, text = "TL", color = "#3b82f6" } }
+                    }
+                }
+            });
+        }
+
+        if (regionProduct.Any())
+        {
+            var topProducts = regionProduct
+                .GroupBy(c => c.ProductName)
+                .Select(g => new { Name = g.Key, Total = g.Sum(x => x.TotalBoxes) })
+                .OrderByDescending(x => x.Total)
+                .Take(TopProductCount)
+                .Select(x => x.Name)
+                .ToList();
+
+            var regions = regionProduct.Select(c => c.RegionName).Distinct().OrderBy(r => r).ToList();
+            var palette = new[] { "rgba(16,185,129,0.75)", "rgba(59,130,246,0.75)", "rgba(245,158,11,0.75)", "rgba(167,139,250,0.75)", "rgba(239,68,68,0.75)" };
+
+            var datasets = topProducts.Select((prod, i) => new
+            {
+                label = prod,
+                data = regions.Select(r => regionProduct.FirstOrDefault(c => c.RegionName == r && c.ProductName == prod)?.TotalBoxes ?? 0m).ToArray(),
+                backgroundColor = palette[i % palette.Length]
+            }).ToArray();
+
+            await JS.InvokeVoidAsync("renderChart", "regionProductChart", new
+            {
+                type = "bar",
+                data = new { labels = regions.ToArray(), datasets = datasets },
+                options = new
+                {
+                    responsive = true,
+                    plugins = new
+                    {
+                        legend = new { labels = new { color = "#cbd5e1", font = new { size = 11 } } }
+                    },
+                    scales = new
+                    {
+                        x = new { stacked = true, ticks = new { color = "#94a3b8" }, grid = new { color = "rgba(255,255,255,0.04)" } },
+                        y = new { stacked = true, ticks = new { color = "#94a3b8" }, grid = new { color = "rgba(255,255,255,0.04)" } }
+                    }
+                }
+            });
+        }
+    }
+
+    private static string FormatNum(decimal v) => v.ToString("N0");
+    private static string FormatTL(decimal v) => v >= 1_000_000m ? $"{v / 1_000_000m:N1}M ₺" : v >= 1_000m ? $"{v / 1_000m:N1}K ₺" : $"{v:N0} ₺";
+
+    private static string ActivityColor(int value, int max)
+    {
+        if (max <= 0) return "#94a3b8";
+        var ratio = (double)value / max;
+        if (ratio >= 0.66) return "#10b981";
+        if (ratio >= 0.33) return "#f59e0b";
+        return "#ef4444";
+    }
+}

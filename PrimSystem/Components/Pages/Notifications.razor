@@ -1,0 +1,335 @@
+@page "/notifications"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject NotificationService NotifSvc
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ProtectedSessionStorage SessionStorage
+@inject ILogger<Notifications> Logger
+@implements IDisposable
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:900px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px">
+
+        <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Bildirimler</div>
+                <div style="font-size:11px;color:#475569">@(unreadCount > 0 ? $"{unreadCount} okunmamis" : "Tumu okundu")</div>
+            </div>
+            @if (unreadCount > 0)
+            {
+                <button @onclick="MarkAll" style="padding:7px 14px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                    Tumunu Okundu Isaretle
+                </button>
+            }
+        </div>
+
+        <!-- BİLDİRİM GÖNDER (Admin / BM / Yönetici) -->
+        @if (Session.CanSendNotification)
+        {
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:@(showSendPanel ? "16px" : "0")">
+                    <div style="font-size:14px;font-weight:700;color:#f1f5f9">Bildirim Gönder</div>
+                    <button @onclick="() => showSendPanel = !showSendPanel"
+                            style="padding:5px 12px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+                        @(showSendPanel ? "Kapat" : "+ Yeni")
+                    </button>
+                </div>
+
+                @if (showSendPanel)
+                {
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                        <div>
+                            <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Alıcı</label>
+                            <select @bind="sendTarget" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                                @if (Session.IsAdmin)
+                                {
+                                    <option value="role_4">Tüm ST'ler</option>
+                                    <option value="role_3">Tüm BM'ler</option>
+                                    <option value="role_2">Tüm Yöneticiler</option>
+                                }
+                                @if (Session.IsBM && Session.CurrentUser?.UserId != null)
+                                {
+                                    <option value="myteam">Ekibim (ST'lerim)</option>
+                                }
+                                @if (Session.IsAdmin)
+                                {
+                                    @foreach (var region in allRegions)
+                                    {
+                                        <option value="region_@region.RegionId">@region.Name — ST'leri</option>
+                                    }
+                                    <option value="">— Bireysel Kullanıcı —</option>
+                                    @foreach (var u in allUsers)
+                                    {
+                                        <option value="user_@u.UserId">@u.FullName (@u.Role?.Name)</option>
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var u in allUsers)
+                                    {
+                                        <option value="user_@u.UserId">@u.FullName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Tür</label>
+                            <select @bind="sendType" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                                <option value="Info">ℹ Bilgi</option>
+                                <option value="Success">✓ Başarı</option>
+                                <option value="Warning">⚠ Uyarı</option>
+                                <option value="Error">✕ Kritik</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:10px">
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Başlık</label>
+                        <input @bind="sendTitle" placeholder="Bildirim başlığı..."
+                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none" />
+                    </div>
+
+                    <div style="margin-bottom:12px">
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Mesaj (opsiyonel)</label>
+                        <textarea @bind="sendMessage" rows="2" placeholder="Detay mesajı..."
+                                  style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box;resize:vertical;outline:none;font-family:inherit"></textarea>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(sendError))
+                    {
+                        <div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:7px 11px;margin-bottom:10px;color:#ef4444;font-size:12px">@sendError</div>
+                    }
+                    @if (!string.IsNullOrEmpty(sendSuccess))
+                    {
+                        <div style="background:rgba(16,185,129,0.1);border-radius:6px;padding:7px 11px;margin-bottom:10px;color:#10b981;font-size:12px">@sendSuccess</div>
+                    }
+
+                    <div style="display:flex;justify-content:flex-end">
+                        <button @onclick="DoSend" disabled="@isSending"
+                                style="padding:8px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+                            @(isSending ? "Gönderiliyor..." : "Gönder")
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- BİLDİRİM LİSTESİ -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+            @if (!notifications.Any())
+            {
+                <div style="padding:48px;text-align:center">
+                    <div style="font-size:36px;margin-bottom:12px">🔔</div>
+                    <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Bildirim Yok</div>
+                    <div style="font-size:13px;color:#64748b">Henüz bir bildirim almadınız.</div>
+                </div>
+            }
+            else
+            {
+                @foreach (var n in notifications)
+                {
+                    var typeColor = n.Type switch {
+                        "Success" => "#10b981",
+                        "Warning" => "#f59e0b",
+                        "Error"   => "#ef4444",
+                        _         => "#3b82f6"
+                    };
+                    var typeLabel = n.Type switch {
+                        "Success" => "Başarı",
+                        "Warning" => "Uyarı",
+                        "Error"   => "Kritik",
+                        _         => "Bilgi"
+                    };
+                    <div @key="n.NotifId"
+                         @onclick="() => MarkRead(n)"
+                         style="padding:14px 18px;border-bottom:1px solid #1e293b;cursor:pointer;background:@(n.IsRead ? "transparent" : "#0d1a2d");display:flex;gap:14px;align-items:flex-start">
+                        <div style="width:8px;height:8px;border-radius:50%;background:@typeColor;margin-top:6px;flex-shrink:0;opacity:@(n.IsRead ? "0.25" : "1")"></div>
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap">
+                                <span style="font-size:13px;font-weight:@(n.IsRead ? "400" : "600");color:@(n.IsRead ? "#94a3b8" : "#f1f5f9")">@n.Title</span>
+                                <span style="padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600;background:@(typeColor)22;color:@typeColor;border:1px solid @(typeColor)33">@typeLabel</span>
+                                @if (!n.IsRead)
+                                {
+                                    <span style="padding:1px 7px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(59,130,246,0.12);color:#3b82f6">YENİ</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(n.Message))
+                            {
+                                <div style="font-size:12px;color:#64748b;margin-bottom:3px">@n.Message</div>
+                            }
+                            <div style="font-size:10px;color:#475569">@TimeAgo(n.CreatedAt)</div>
+                        </div>
+                        @if (!n.IsRead)
+                        {
+                            <div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-top:6px"></div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Notification> notifications = new();
+    private List<User> allUsers = new();
+    private List<Region> allRegions = new();
+    private int unreadCount = 0;
+    private bool _sessionChecked = false;
+
+    // Gönder formu
+    private bool showSendPanel = false;
+    private bool isSending = false;
+    private string sendTarget = "role_4";
+    private string sendType = "Info";
+    private string sendTitle = "";
+    private string sendMessage = "";
+    private string sendError = "";
+    private string sendSuccess = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (Session.IsLoggedIn)
+            {
+                await LoadData();
+                if (Session.CanSendNotification)
+                    await LoadSendTargets();
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        notifications = await NotifSvc.GetForUserAsync(Session.CurrentUser!.UserId, 100);
+        unreadCount = notifications.Count(n => !n.IsRead);
+    }
+
+    private async Task LoadSendTargets()
+    {
+        using var db = DbFactory.CreateDbContext();
+        allRegions = await db.Regions.Where(r => r.IsActive).OrderBy(r => r.Name).ToListAsync();
+
+        if (Session.IsAdmin)
+        {
+            allUsers = await db.Users.Include(u => u.Role)
+                .Where(u => u.IsActive && !u.IsDeleted && u.RoleId != 1)
+                .OrderBy(u => u.FullName).ToListAsync();
+            sendTarget = "role_4";
+        }
+        else if (Session.IsBM)
+        {
+            allUsers = await db.Users.Include(u => u.Role)
+                .Where(u => u.IsActive && !u.IsDeleted && u.ManagerId == Session.CurrentUser!.UserId)
+                .OrderBy(u => u.FullName).ToListAsync();
+            sendTarget = "myteam";
+        }
+        else
+        {
+            allUsers = await db.Users.Include(u => u.Role)
+                .Where(u => u.IsActive && !u.IsDeleted && u.RoleId != 1)
+                .OrderBy(u => u.FullName).ToListAsync();
+            sendTarget = allUsers.Any() ? $"user_{allUsers.First().UserId}" : "";
+        }
+    }
+
+    private async Task MarkRead(Notification n)
+    {
+        if (n.IsRead) return;
+        await NotifSvc.MarkReadAsync(n.NotifId, Session.CurrentUser!.UserId);
+        n.IsRead = true;
+        unreadCount = Math.Max(0, unreadCount - 1);
+    }
+
+    private async Task MarkAll()
+    {
+        await NotifSvc.MarkAllReadAsync(Session.CurrentUser!.UserId);
+        foreach (var n in notifications) n.IsRead = true;
+        unreadCount = 0;
+    }
+
+    private async Task DoSend()
+    {
+        sendError = ""; sendSuccess = "";
+        if (string.IsNullOrWhiteSpace(sendTitle)) { sendError = "Başlık giriniz"; return; }
+        if (string.IsNullOrWhiteSpace(sendTarget)) { sendError = "Alıcı seçiniz"; return; }
+
+        isSending = true;
+        try
+        {
+            int senderId = Session.CurrentUser!.UserId;
+
+            if (sendTarget.StartsWith("role_") && int.TryParse(sendTarget[5..], out int roleId))
+                await NotifSvc.SendToRoleAsync(roleId, sendTitle, sendMessage, sendType, senderId);
+            else if (sendTarget.StartsWith("region_") && int.TryParse(sendTarget[7..], out int regionId))
+                await NotifSvc.SendToRegionAsync(regionId, sendTitle, sendMessage, sendType, senderId);
+            else if (sendTarget == "myteam")
+                await NotifSvc.SendToManagerTeamAsync(senderId, sendTitle, sendMessage, sendType, senderId);
+            else if (sendTarget.StartsWith("user_") && int.TryParse(sendTarget[5..], out int toUserId))
+                await NotifSvc.SendAsync(toUserId, sendTitle, sendMessage, sendType, senderId);
+            else { sendError = "Geçersiz alıcı"; return; }
+
+            sendSuccess = "Bildirim gönderildi ✓";
+            sendTitle = ""; sendMessage = "";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Bildirim gönderilemedi (hedef: {Target})", sendTarget);
+            sendError = "Bildirim gönderilemedi. Lütfen tekrar deneyin.";
+        }
+        finally
+        {
+            isSending = false;
+            StateHasChanged();
+            if (!string.IsNullOrEmpty(sendSuccess))
+            {
+                var token = _cts.Token;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(3000, token);
+                        sendSuccess = "";
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    catch (OperationCanceledException) { /* sayfa kapatıldı */ }
+                    catch (ObjectDisposedException) { /* circuit sonlandı */ }
+                }, token);
+            }
+        }
+    }
+
+    private readonly CancellationTokenSource _cts = new();
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private static string TimeAgo(DateTime utcTime)
+    {
+        var diff = DateTime.UtcNow - utcTime;
+        if (diff.TotalMinutes < 1) return "az önce";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes} dk önce";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours} sa önce";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} gün önce";
+        return utcTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+    }
+}

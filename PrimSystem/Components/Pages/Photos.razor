@@ -1,0 +1,43 @@
+@page "/photos"
+@using PrimSystem.Services
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!_sessionChecked)
+{
+    @* oturum restore bekleniyor *@
+}
+else if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+}
+else
+{
+    <div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+        <div style="max-width:900px;margin:0 auto;padding:24px">
+            <div style="margin-bottom:16px">
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">📷 Fotoğraf Yükleme</div>
+                <div style="font-size:11px;color:#475569">Saha fotoğraflarınızı yükleyin; yöneticiniz kontrol ekranından onaylar.</div>
+            </div>
+            <StPhotoCard />
+        </div>
+    </div>
+}
+
+@code {
+    private bool _sessionChecked;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (!Session.IsLoggedIn) { Nav.NavigateTo("/login"); return; }
+            StateHasChanged();
+        }
+    }
+}

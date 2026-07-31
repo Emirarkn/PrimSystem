@@ -1,0 +1,42 @@
+@using System.Globalization
+
+@* Genel amaçlı etiketli ilerleme barı — brick/eczane/realizasyon listelerinde
+   tekrar kullanılır. Percent (0–100) bar genişliğini, ValueText sağ değeri verir. *@
+
+<div style="margin-bottom:@(Dense ? "6px" : "9px")">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:3px">
+        <span style="font-size:12px;color:#e2e8f0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            @Label
+            @if (!string.IsNullOrEmpty(Sub))
+            {
+                <span style="font-size:10px;color:#475569;font-weight:500;margin-left:4px">@Sub</span>
+            }
+        </span>
+        <span style="font-size:12px;font-family:monospace;font-weight:700;color:@BarColor;white-space:nowrap">@ValueText</span>
+    </div>
+    <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:@(Width)%;background:linear-gradient(90deg,@BarColor,@(BarColor)99);border-radius:3px;transition:width 0.8s ease"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Sub { get; set; }
+    [Parameter] public string ValueText { get; set; } = "";
+    /// <summary>Bar dolum yüzdesi (0–100). Realizasyon için skor*100, hacim için max'a göre orantı.</summary>
+    [Parameter] public double Percent { get; set; }
+    /// <summary>Sabit renk; verilmezse Percent eşiklerine göre yeşil/amber/kırmızı.</summary>
+    [Parameter] public string? ColorOverride { get; set; }
+    /// <summary>Eşik renklendirmesi uygulansın mı (realizasyon için true; ham hacim için false).</summary>
+    [Parameter] public bool Threshold { get; set; } = true;
+    [Parameter] public bool Dense { get; set; }
+
+    private string Width => Math.Clamp(Percent, 0, 100).ToString("F1", CultureInfo.InvariantCulture);
+
+    private string BarColor =>
+        ColorOverride
+        ?? (!Threshold ? "#06b6d4"
+            : Percent >= 85 ? "#10b981"
+            : Percent >= 50 ? "#f59e0b"
+            : "#ef4444");
+}

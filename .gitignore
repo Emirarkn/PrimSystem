@@ -1,0 +1,54 @@
+# ── Derleme çıktıları ────────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ── IDE ──────────────────────────────────────────────────────────────
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+# ── Loglar ───────────────────────────────────────────────────────────
+# Serilog günlük döngülü dosyaları (logs/prim-YYYYMMDD.log)
+logs/
+*.log
+
+# ── GERÇEK ŞİRKET VERİSİ — ASLA COMMIT EDİLMEZ ───────────────────────
+# Kök dizindeki Excel'ler canlı satış/hedef/eczane verisi içeriyor:
+#   Mutabakat_26.xlsx (1,7 MB), sablon_Hedef5.xlsx (614 KB),
+#   Kenvue_Q2_vs_SellOut_N_St_Brick.xlsx, Mumessil_Bazinda_*.xlsx,
+#   Prim_2026_Q2_*.xlsx (prim çıktısı), Barkod-Product.xlsx (barkod/ürün master)
+# Depo uzak bir sunucuya push edilirse bunlar veri sızıntısı olur.
+#
+# NOT: Barkod-Product.xlsx marka→ürün eşleştirmesinin TEK doğruluk kaynağı ve
+# sürüm geçmişi tutmaya değer. Depo PRIVATE ise aşağıdaki satırı açarak
+# yalnızca onu takibe alabilirsiniz:
+#   !Barkod-Product.xlsx
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+
+# ── Sırlar ───────────────────────────────────────────────────────────
+# (SMTP parolası ve prod connection string User Secrets / env var'da —
+#  appsettings*.json dosyalarında sır YOK, onlar takip ediliyor)
+secrets.json
+*.pfx
+*.p12
+appsettings.*.Local.json
+
+# ── DataProtection anahtarları ───────────────────────────────────────
+keys/
+*.xml.key
+
+# ── Yedek / geçici ───────────────────────────────────────────────────
+*.bak
+*.tmp
+~$*

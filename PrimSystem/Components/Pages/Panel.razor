@@ -1,0 +1,327 @@
+@page "/panel"
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!_sessionChecked)
+{
+    @* Session henüz restore edilmedi *@
+}
+else if (!Session.IsLoggedIn || !Session.CanManage)
+{
+    <LoginRequired />
+}
+else
+{
+<div style="min-height:100vh;background:#080e1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:1280px;margin:0 auto;padding:28px 24px">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Kontrol Paneli</div>
+                <div style="font-size:11px;color:#475569">Yonetim & Izleme</div>
+            </div>
+            <button @onclick="LoadData" style="padding:6px 12px;background:rgba(99,102,241,0.1);color:#818cf8;border:1px solid rgba(99,102,241,0.25);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">🔄 Yenile</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="text-align:center;padding:60px;color:#64748b;font-size:13px">Yükleniyor...</div>
+        }
+        else
+        {
+            <!-- ÖZET KARTLAR -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+                <div style="background:#111827;border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">🟢 Online</div>
+                    <div style="font-size:30px;font-weight:900;color:#10b981;line-height:1">@onlineCount</div>
+                    <div style="font-size:10px;color:#475569;margin-top:3px">aktif kullanıcı</div>
+                </div>
+                <div style="background:#111827;border:1px solid rgba(148,163,184,0.15);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">👥 Toplam Kullanıcı</div>
+                    <div style="font-size:30px;font-weight:900;color:#f1f5f9;line-height:1">@userRows.Count</div>
+                    <div style="font-size:10px;color:#475569;margin-top:3px">aktif hesap</div>
+                </div>
+                <div style="background:#111827;border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">📋 Yayınlanan</div>
+                    <div style="font-size:30px;font-weight:900;color:#6366f1;line-height:1">@publishedGroups.Count</div>
+                    <div style="font-size:10px;color:#475569;margin-top:3px">dönem yayında</div>
+                </div>
+                <div style="background:#111827;border:1px solid rgba(245,158,11,0.2);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">📅 Son Giriş</div>
+                    <div style="font-size:13px;font-weight:700;color:#f59e0b;line-height:1.3;margin-top:4px">
+                        @(userRows.Where(u => u.LastLogin.HasValue).OrderByDescending(u => u.LastLogin).Select(u => u.FullName.Split(' ').FirstOrDefault()).FirstOrDefault() ?? "—")
+                    </div>
+                    <div style="font-size:10px;color:#475569;margin-top:3px">
+                        @(userRows.Where(u => u.LastLogin.HasValue).OrderByDescending(u => u.LastLogin).Select(u => u.LastLogin?.ToLocalTime().ToString("dd.MM HH:mm")).FirstOrDefault() ?? "—")
+                    </div>
+                </div>
+            </div>
+
+            <!-- YAYINLANAN RAPORLAR -->
+            <div style="background:#111827;border:1px solid rgba(255,255,255,0.06);border-radius:14px;overflow:hidden;margin-bottom:20px">
+                <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px">
+                    <span style="font-size:14px;font-weight:700;color:#f1f5f9">📋 Yayınlanan Raporlar</span>
+                    <span style="font-size:11px;color:#475569">@publishedGroups.Count dönem</span>
+                </div>
+                @if (!publishedGroups.Any())
+                {
+                    <div style="padding:32px;text-align:center;color:#475569;font-size:13px">Henüz yayınlanmış rapor yok</div>
+                }
+                else
+                {
+                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead>
+                            <tr style="background:#0d1424">
+                                <th style="padding:9px 16px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">YIL</th>
+                                <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">DÖNEM</th>
+                                <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">YAYIN TARİHİ</th>
+                                <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ST SAYISI</th>
+                                <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">GEÇTİ</th>
+                                <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">GEÇİŞ %</th>
+                                <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ORT. SKOR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var g in publishedGroups)
+                            {
+                                var passRate = g.Eligible > 0 ? (double)g.Passed / g.Eligible * 100 : 0;
+                                var passColor = passRate >= 70 ? "#10b981" : passRate >= 50 ? "#f59e0b" : "#ef4444";
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.03)">
+                                    <td style="padding:10px 16px;color:#f1f5f9;font-weight:700;font-family:monospace">@g.Year</td>
+                                    <td style="padding:10px 12px">
+                                        <span style="padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3)">@g.Quarter</span>
+                                    </td>
+                                    <td style="padding:10px 12px;color:#94a3b8;font-size:11px">@(g.PublishedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+                                    <td style="padding:10px 12px;text-align:center;color:#f1f5f9;font-family:monospace">@g.StCount</td>
+                                    <td style="padding:10px 12px;text-align:center;color:#10b981;font-family:monospace;font-weight:600">@g.Passed</td>
+                                    <td style="padding:10px 12px;text-align:center">
+                                        <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+                                            <div style="width:50px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+                                                <div style="height:100%;width:@(Math.Min(passRate,100).ToString("F0"))%;background:@passColor;border-radius:2px"></div>
+                                            </div>
+                                            <span style="font-weight:700;color:@passColor;font-family:monospace">%@passRate.ToString("F0")</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding:10px 12px;text-align:center;color:#3b82f6;font-family:monospace;font-weight:600">%@g.AvgScore.ToString("F1")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <!-- KULLANICI DURUMU -->
+            <div style="background:#111827;border:1px solid rgba(255,255,255,0.06);border-radius:14px;overflow:hidden">
+                <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-size:14px;font-weight:700;color:#f1f5f9">👥 Kullanıcı Durumu</span>
+                        <span style="font-size:11px;color:#475569">@userRows.Count aktif hesap · @onlineCount online</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <select @bind="filterRoleId" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:11px">
+                            <option value="0">Tüm Roller</option>
+                            <option value="1">Admin</option>
+                            <option value="2">Yönetici</option>
+                            <option value="3">Bölge Müdürü</option>
+                            <option value="4">ST</option>
+                        </select>
+                        <input @bind="searchText" @bind:event="oninput" placeholder="İsim ara..." style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:11px;width:160px" />
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                        <tr style="background:#0d1424">
+                            <th style="padding:9px 16px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">AD SOYAD</th>
+                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BÖLGE</th>
+                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">ROL</th>
+                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SON GİRİŞ</th>
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">DURUM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in filteredUsers)
+                        {
+                            var timeAgo = FormatTimeAgo(u.LastLogin);
+                            <tr style="border-bottom:1px solid rgba(255,255,255,0.03)">
+                                <td style="padding:9px 16px;color:#f1f5f9;font-weight:500">@u.FullName</td>
+                                <td style="padding:9px 12px;color:#64748b;font-size:11px">@(u.Region ?? "—")</td>
+                                <td style="padding:9px 12px">
+                                    <span style="padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;background:@RoleColor(u.RoleId)22;color:@RoleColor(u.RoleId)">@u.RoleName</span>
+                                </td>
+                                <td style="padding:9px 12px;color:#64748b;font-size:11px">
+                                    @(u.LastLogin.HasValue ? u.LastLogin.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : "Hiç giriş yok")
+                                </td>
+                                <td style="padding:9px 12px;text-align:center">
+                                    @if (u.IsOnline)
+                                    {
+                                        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3)">
+                                            <span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block"></span>Online
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;background:rgba(71,85,105,0.12);color:#475569;border:1px solid rgba(71,85,105,0.2)">
+                                            @timeAgo
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+}
+
+@code {
+    private bool _sessionChecked = false;
+    private bool isLoading = true;
+    private int filterRoleId = 0;
+    private string searchText = "";
+
+    private List<PublishedGroup> publishedGroups = new();
+    private List<UserRow> userRows = new();
+    private int onlineCount => userRows.Count(u => u.IsOnline);
+
+    private List<UserRow> filteredUsers =>
+        userRows.Where(u =>
+            (filterRoleId == 0 || u.RoleId == filterRoleId) &&
+            (string.IsNullOrEmpty(searchText) || u.FullName.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        ).OrderByDescending(u => u.IsOnline).ThenByDescending(u => u.LastLogin).ToList();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            await LoadData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            var onlineCutoff = DateTime.UtcNow.AddMinutes(-15);
+
+            // Yayınlanan hesaplamalar
+            var pubCalcs = await db.Calculations
+                .Where(c => c.IsPublished)
+                .ToListAsync();
+
+            publishedGroups = pubCalcs
+                .GroupBy(c => new { c.Year, c.Quarter })
+                .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Quarter)
+                .Select(g =>
+                {
+                    var eligible = g.Where(c => c.IsEligible).ToList();
+                    return new PublishedGroup
+                    {
+                        Year = g.Key.Year,
+                        Quarter = g.Key.Quarter,
+                        PublishedAt = g.Max(c => c.PublishedAt),
+                        StCount = g.Count(),
+                        Eligible = eligible.Count,
+                        Passed = eligible.Count(c => c.PassedGate),
+                        AvgScore = eligible.Any() ? eligible.Average(c => (double)(c.FinalScore ?? c.TotalScore)) * 100 : 0
+                    };
+                }).ToList();
+
+            // Tüm aktif kullanıcılar
+            var users = await db.Users
+                .Where(u => u.IsActive && !u.IsDeleted)
+                .Include(u => u.Region)
+                .Include(u => u.Role)
+                .ToListAsync();
+
+            var userIds = users.Select(u => u.UserId).ToList();
+
+            // Her kullanıcı için en son oturum durumu
+            var sessions = await db.UserSessions
+                .Where(s => userIds.Contains(s.UserId))
+                .ToListAsync();
+
+            var sessionMap = sessions
+                .GroupBy(s => s.UserId)
+                .ToDictionary(g => g.Key, g => new
+                {
+                    LastLogin = g.Max(s => s.LoginAt),
+                    IsOnline  = g.Any(s => s.IsActive && s.LastSeenAt > onlineCutoff)
+                });
+
+            userRows = users.Select(u =>
+            {
+                sessionMap.TryGetValue(u.UserId, out var sess);
+                return new UserRow
+                {
+                    UserId    = u.UserId,
+                    FullName  = u.FullName,
+                    Region    = u.Region?.Name,
+                    RoleId    = u.RoleId,
+                    RoleName  = u.Role?.Name ?? "—",
+                    LastLogin = sess?.LastLogin,
+                    IsOnline  = sess?.IsOnline ?? false
+                };
+            }).ToList();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string FormatTimeAgo(DateTime? dt)
+    {
+        if (!dt.HasValue) return "Hiç giriş yok";
+        var diff = DateTime.UtcNow - dt.Value;
+        if (diff.TotalMinutes < 60)  return $"{(int)diff.TotalMinutes} dk önce";
+        if (diff.TotalHours < 24)    return $"{(int)diff.TotalHours} saat önce";
+        if (diff.TotalDays < 7)      return $"{(int)diff.TotalDays} gün önce";
+        return dt.Value.ToLocalTime().ToString("dd.MM.yyyy");
+    }
+
+    private static string RoleColor(int roleId) => roleId switch
+    {
+        1 => "#ef4444",
+        2 => "#f59e0b",
+        3 => "#3b82f6",
+        _ => "#10b981"
+    };
+
+    private class PublishedGroup
+    {
+        public int Year { get; set; }
+        public string Quarter { get; set; } = "";
+        public DateTime? PublishedAt { get; set; }
+        public int StCount { get; set; }
+        public int Eligible { get; set; }
+        public int Passed { get; set; }
+        public double AvgScore { get; set; }
+    }
+
+    private class UserRow
+    {
+        public int UserId { get; set; }
+        public string FullName { get; set; } = "";
+        public string? Region { get; set; }
+        public int RoleId { get; set; }
+        public string RoleName { get; set; } = "";
+        public DateTime? LastLogin { get; set; }
+        public bool IsOnline { get; set; }
+    }
+}

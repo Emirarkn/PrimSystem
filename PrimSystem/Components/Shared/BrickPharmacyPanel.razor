@@ -1,0 +1,212 @@
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@inject CalculationService CalcSvc
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+@* Brick realizasyonu + bricklerdeki en iyi eczaneler (kurum adıyla).
+   ST için UserId, BM için RegionId verilir. Ürün filtresi + arama + sıralama panel içinde. *@
+
+<div style="margin-bottom:16px">
+
+    <!-- FİLTRE / SIRALAMA ÇUBUĞU (istemci tarafı — sunucuya gitmez) -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <input @bind="search" @bind:event="oninput" placeholder="🔍 Brick / şehir / eczane ara…"
+               style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:11px;min-width:200px" />
+        <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:10px;color:#64748b">🗺 Brick:</span>
+            <select @bind="brickSort" style="@SelStyle">
+                <option value="real">Realizasyon ↓</option>
+                <option value="sell">Sell-Out ↓</option>
+                <option value="target">Hedef ↓</option>
+                <option value="name">İsim A→Z</option>
+            </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:10px;color:#64748b">🏛 Eczane:</span>
+            <select @bind="phSort" style="@SelStyle">
+                <option value="box">Kutu ↓</option>
+                <option value="tl">TL ↓</option>
+                <option value="name">İsim A→Z</option>
+            </select>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+        <!-- BRICK PERFORMANSI -->
+        <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+                <div style="font-size:13px;font-weight:700;color:#f1f5f9">🗺 @BrickTitle</div>
+                @if (products.Any())
+                {
+                    <select @bind="selectedProductId" @bind:after="ReloadAsync"
+                            style="padding:5px 9px;background:#0a0f1a;border:1px solid rgba(139,92,246,0.3);border-radius:7px;color:#f1f5f9;font-size:11px">
+                        <option value="">Tüm Ürünler</option>
+                        @foreach (var p in products)
+                        {
+                            <option value="@p.ProductId">@p.Name</option>
+                        }
+                    </select>
+                }
+            </div>
+            @if (loading)
+            {
+                <div style="color:#475569;font-size:12px;padding:10px 0">Yükleniyor…</div>
+            }
+            else if (!bricks.Any())
+            {
+                <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Bu dönem için brick verisi yok.</div>
+            }
+            else
+            {
+                var brickRows = DisplayBricks();
+                if (!brickRows.Any())
+                {
+                    <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Aramayla eşleşen brick yok.</div>
+                }
+                else
+                {
+                    foreach (var b in brickRows)
+                    {
+                        var pct = (double)b.Realization * 100;
+                        <PerfBar Label="@b.BrickName"
+                                 Sub="@(string.IsNullOrEmpty(b.City) ? null : b.City)"
+                                 Percent="@pct"
+                                 ValueText="@($"%{pct:F0}  ·  {b.SellOut:N0}/{b.Target:N0}")"
+                                 Threshold="true" Dense="true" />
+                    }
+                }
+            }
+        </div>
+
+        <!-- EN İYİ ECZANELER -->
+        <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px">
+            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:14px">🏛 @PharmacyTitle</div>
+            @if (loading)
+            {
+                <div style="color:#475569;font-size:12px;padding:10px 0">Yükleniyor…</div>
+            }
+            else if (!pharmacies.Any())
+            {
+                <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Bu dönem için eczane (sell-out) verisi yok.</div>
+            }
+            else
+            {
+                var phRows = DisplayPharmacies();
+                if (!phRows.Any())
+                {
+                    <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Aramayla eşleşen eczane yok.</div>
+                }
+                else
+                {
+                    var maxBox = phRows.Max(p => p.Boxes);
+                    var rank = 0;
+                    foreach (var ph in phRows)
+                    {
+                        rank++;
+                        var pct = maxBox > 0 ? (double)(ph.Boxes / maxBox) * 100 : 0;
+                        var name = string.IsNullOrWhiteSpace(ph.KurumName) ? (string.IsNullOrWhiteSpace(ph.GLN) ? "(bilinmiyor)" : ph.GLN) : ph.KurumName;
+                        var loc = string.Join(" / ", new[] { ph.BrickName, ph.Ilce, ph.Il }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                        <PerfBar Label="@($"{rank}. {name}")"
+                                 Sub="@loc"
+                                 Percent="@pct"
+                                 ValueText="@($"{ph.Boxes:N0} kutu  ·  {ph.AmountTL:N0} ₺")"
+                                 Threshold="false" Dense="true" />
+                    }
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Year { get; set; }
+    [Parameter] public string Quarter { get; set; } = "";
+    [Parameter] public int? RegionId { get; set; }
+    [Parameter] public int? UserId { get; set; }
+    [Parameter] public string BrickTitle { get; set; } = "Brick Performansı";
+    [Parameter] public string PharmacyTitle { get; set; } = "En İyi Eczaneler";
+    [Parameter] public int TopPharmacies { get; set; } = 12;
+
+    private List<Product> products = new();
+    private List<BrickPerfRow> bricks = new();
+    private List<PharmacyPerfRow> pharmacies = new();
+    private int? selectedProductId;
+    private bool loading = true;
+    private int _loadedYear; private string _loadedQuarter = ""; private int? _loadedRegion; private int? _loadedUser;
+
+    // İstemci tarafı arama + sıralama (sunucuya gitmez).
+    private string search = "";
+    private string brickSort = "real";
+    private string phSort = "box";
+
+    private const string SelStyle = "padding:5px 8px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:11px";
+
+    private bool Match(params string?[] fields)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return true;
+        var q = search.Trim();
+        return fields.Any(f => !string.IsNullOrEmpty(f) && f.Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private List<BrickPerfRow> DisplayBricks()
+    {
+        var rows = bricks.Where(b => Match(b.BrickName, b.City));
+        rows = brickSort switch
+        {
+            "sell" => rows.OrderByDescending(b => b.SellOut),
+            "target" => rows.OrderByDescending(b => b.Target),
+            "name" => rows.OrderBy(b => b.BrickName),
+            _ => rows.OrderByDescending(b => b.Realization)
+        };
+        return rows.ToList();
+    }
+
+    private List<PharmacyPerfRow> DisplayPharmacies()
+    {
+        var rows = pharmacies.Where(p => Match(p.KurumName, p.GLN, p.Il, p.Ilce, p.BrickName));
+        rows = phSort switch
+        {
+            "tl" => rows.OrderByDescending(p => p.AmountTL),
+            "name" => rows.OrderBy(p => p.KurumName),
+            _ => rows.OrderByDescending(p => p.Boxes)
+        };
+        return rows.ToList();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Year <= 0 || string.IsNullOrEmpty(Quarter)) return;
+        if (Year == _loadedYear && Quarter == _loadedQuarter && RegionId == _loadedRegion && UserId == _loadedUser)
+            return;
+        _loadedYear = Year; _loadedQuarter = Quarter; _loadedRegion = RegionId; _loadedUser = UserId;
+
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            products = await db.Products.Where(p => p.IsActive && p.IsPrimEligible)
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync();
+        }
+        catch { products = new(); }
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        loading = true; StateHasChanged();
+        try
+        {
+            var bt = CalcSvc.GetBrickPerformanceAsync(Year, Quarter, RegionId, UserId, selectedProductId);
+            var pt = CalcSvc.GetTopPharmaciesAsync(Year, Quarter, RegionId, UserId, selectedProductId, TopPharmacies);
+            await Task.WhenAll(bt, pt);
+            bricks = bt.Result;
+            pharmacies = pt.Result;
+        }
+        catch
+        {
+            bricks = new(); pharmacies = new();
+        }
+        finally { loading = false; StateHasChanged(); }
+    }
+}

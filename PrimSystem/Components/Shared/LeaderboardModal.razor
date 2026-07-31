@@ -1,0 +1,166 @@
+@using PrimSystem.Services
+@using PrimSystem.Data
+@inject CalculationService CalcSvc
+
+@if (Show)
+{
+    <!-- Backdrop -->
+    <div style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center"
+         @onclick="OnClose">
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:16px;width:520px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,0.6)"
+             @onclick:stopPropagation>
+
+            <!-- Baslik -->
+            <div style="padding:18px 20px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+                <div>
+                    <div style="font-size:16px;font-weight:700;color:#f1f5f9">🏆 Siparis Siralamasi</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:2px">@Quarter @Year · @(string.IsNullOrEmpty(ProductName) ? "Tum Urunler" : ProductName)</div>
+                </div>
+                <button @onclick="OnClose" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px;line-height:1;padding:4px">✕</button>
+            </div>
+
+            <!-- Icerik -->
+            <div style="overflow-y:auto;flex:1">
+                @if (isLoading)
+                {
+                    <div style="padding:40px;text-align:center;color:#64748b;font-size:13px">Yukleniyor...</div>
+                }
+                else if (!allRows.Any())
+                {
+                    <div style="padding:40px;text-align:center;color:#64748b;font-size:13px">Siparis verisi bulunamadi</div>
+                }
+                else
+                {
+                    <!-- Kolon basliklari -->
+                    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 4px;font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.05em">
+                        <div style="width:28px;text-align:center">#</div>
+                        <div style="flex:1">ST</div>
+                        <div style="width:70px;text-align:right">Kutu</div>
+                        <div style="width:70px;text-align:right">TL</div>
+                        <div style="width:55px;text-align:right">Kurum</div>
+                    </div>
+
+                    <!-- Top 10 -->
+                    <div style="padding:4px 16px 12px">
+                        @foreach (var r in top10)
+                        {
+                            var isSelf = r.UserId == CurrentUserId;
+                            var medalColor = r.Rank switch {
+                                1 => "#f59e0b",
+                                2 => "#94a3b8",
+                                3 => "#cd7c3b",
+                                _ => "#475569"
+                            };
+                            var medal = r.Rank switch {
+                                1 => "🥇",
+                                2 => "🥈",
+                                3 => "🥉",
+                                _ => $"{r.Rank}"
+                            };
+
+                            <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:9px;margin-bottom:3px;background:@(isSelf ? "rgba(59,130,246,0.08)" : "transparent");border:1px solid @(isSelf ? "rgba(59,130,246,0.35)" : "transparent")">
+                                <!-- Sira -->
+                                <div style="width:28px;text-align:center;font-size:@(r.Rank <= 3 ? "20px" : "13px");font-weight:700;color:@medalColor;flex-shrink:0">
+                                    @medal
+                                </div>
+
+                                <!-- Isim -->
+                                <div style="flex:1;min-width:0">
+                                    <div style="font-size:13px;font-weight:@(isSelf ? "700" : "500");color:@(isSelf ? "#60a5fa" : "#f1f5f9");white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                                        @r.FullName
+                                        @if (isSelf)
+                                        {
+                                            <span style="font-size:10px;font-weight:600;color:#3b82f6;margin-left:6px">(sen)</span>
+                                        }
+                                    </div>
+                                    <div style="font-size:10px;color:#475569">@r.Region</div>
+                                </div>
+
+                                <!-- Metrikler -->
+                                <div style="width:70px;text-align:right;font-family:monospace;font-size:13px;font-weight:700;color:#06b6d4">
+                                    @r.TotalBoxes.ToString("N0")
+                                </div>
+                                <div style="width:70px;text-align:right;font-family:monospace;font-size:12px;color:#10b981">
+                                    @r.TotalTL.ToString("N0")
+                                </div>
+                                <div style="width:55px;text-align:right;font-family:monospace;font-size:12px;color:#a78bfa">
+                                    @r.UniquePharmacies
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Kullanicinin sirasi (top 10 disindaysa) -->
+                    @if (myRank > 10)
+                    {
+                        var myRow = allRows.FirstOrDefault(x => x.UserId == CurrentUserId);
+                        @if (myRow != null)
+                        {
+                            <div style="margin:0 16px 12px;padding:10px 14px;background:#0a0f1a;border:1px solid rgba(59,130,246,0.35);border-radius:9px;display:flex;align-items:center;gap:8px">
+                                <div style="width:28px;text-align:center;font-size:13px;font-weight:700;color:#3b82f6">@myRank</div>
+                                <div style="flex:1;font-size:13px;font-weight:700;color:#60a5fa">@myRow.FullName <span style="font-size:10px">(sen)</span></div>
+                                <div style="font-family:monospace;font-size:13px;font-weight:700;color:#06b6d4">@myRow.TotalBoxes.ToString("N0")</div>
+                                <div style="font-family:monospace;font-size:12px;color:#10b981">@myRow.TotalTL.ToString("N0")</div>
+                                <div style="font-family:monospace;font-size:12px;color:#a78bfa">@myRow.UniquePharmacies</div>
+                            </div>
+                        }
+                    }
+
+                    <!-- Alt bilgi -->
+                    <div style="padding:10px 16px 16px;text-align:center;border-top:1px solid #1e293b;margin-top:4px">
+                        @if (myRank > 0)
+                        {
+                            <span style="font-size:12px;color:#64748b">
+                                Senin siran: <strong style="color:#f1f5f9">@myRank</strong> / @allRows.Count ST
+                            </span>
+                        }
+                        else
+                        {
+                            <span style="font-size:12px;color:#64748b">Toplam @allRows.Count ST</span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public int Year { get; set; }
+    [Parameter] public string Quarter { get; set; } = "";
+    [Parameter] public int CurrentUserId { get; set; }
+    [Parameter] public int? ProductId { get; set; }
+    [Parameter] public string? ProductName { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool isLoading = false;
+    private List<OrderLeaderRow> allRows = new();
+    private List<OrderLeaderRow> top10 = new();
+    private int myRank = 0;
+    private int _loadedYear = 0;
+    private string _loadedQuarter = "";
+    private int? _loadedProductId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && Year > 0 && !string.IsNullOrEmpty(Quarter)
+            && (Year != _loadedYear || Quarter != _loadedQuarter || ProductId != _loadedProductId))
+            await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loadedYear = Year;
+        _loadedQuarter = Quarter;
+        _loadedProductId = ProductId;
+        isLoading = true;
+        try
+        {
+            allRows = await CalcSvc.GetOrderLeaderboardAsync(ProductId, Year, Quarter);
+            top10 = allRows.Take(10).ToList();
+            myRank = allRows.FirstOrDefault(r => r.UserId == CurrentUserId)?.Rank ?? 0;
+        }
+        finally { isLoading = false; }
+    }
+}

@@ -1,0 +1,192 @@
+@using PrimSystem.Services
+@using PrimSystem.Components.Shared
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@implements IDisposable
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+
+@if (Session.IsLoggedIn)
+{
+    <div style="position:sticky;top:0;z-index:100;height:52px;background:rgba(11,17,32,0.95);border-bottom:1px solid rgba(255,255,255,0.06);backdrop-filter:blur(12px);padding:0 24px;display:flex;align-items:center;justify-content:space-between;font-family:Segoe UI,sans-serif">
+
+        <!-- Sol: Logo + Nav -->
+        <div style="display:flex;align-items:center;gap:16px;height:100%">
+            <div style="display:flex;align-items:center;gap:10px;cursor:pointer" @onclick='() => Nav.NavigateTo("/")'>
+                <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(99,102,241,0.3)">P</div>
+                <span style="font-size:14px;font-weight:700;color:#f1f5f9">PrimSystem</span>
+            </div>
+
+            <div style="width:1px;height:24px;background:#1e293b"></div>
+
+            <nav style="display:flex;align-items:center;gap:2px;height:100%">
+                @foreach (var item in visibleItems)
+                {
+                    var active = IsActive(item.Route);
+                    <button type="button" @onclick="() => Navigate(item.Route)"
+                            style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;border:1px solid @(active ? "rgba(16,185,129,0.3)" : "transparent");background:@(active ? "rgba(16,185,129,0.12)" : "transparent");color:@(active ? "#10b981" : "#94a3b8");transition:all 0.15s">
+                        <span style="font-size:13px">@item.Icon</span>
+                        @item.Label
+                    </button>
+                }
+
+                @if (Session.CanManage)
+                {
+                    var mActive = manageRoutes.Any(r => IsActive(r));
+                    <div style="position:relative;height:100%;display:flex;align-items:center">
+                        <button type="button" @onclick="ToggleManageMenu"
+                                style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;border:1px solid @(mActive ? "rgba(245,158,11,0.3)" : "transparent");background:@(mActive ? "rgba(245,158,11,0.12)" : "transparent");color:@(mActive ? "#f59e0b" : "#94a3b8");transition:all 0.15s">
+                            <span style="font-size:13px">@("⚙️")</span>
+                            Yönetim
+                            <span style="font-size:9px;margin-left:2px">@(showManageMenu ? "▲" : "▼")</span>
+                        </button>
+
+                        @if (showManageMenu)
+                        {
+                            <div style="position:fixed;inset:0;z-index:199" @onclick="CloseManageMenu"></div>
+                            <div style="position:absolute;left:0;top:100%;margin-top:4px;background:#111827;border:1px solid #1e293b;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:200;min-width:180px;overflow:hidden;padding:4px">
+                                @foreach (var mi in manageItems)
+                                {
+                                    var mia = IsActive(mi.Route);
+                                    <button type="button" @onclick="() => Navigate(mi.Route)"
+                                            style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;cursor:pointer;text-align:left;border:none;background:@(mia ? "rgba(245,158,11,0.12)" : "transparent");color:@(mia ? "#f59e0b" : "#cbd5e1");font-size:12px;font-weight:@(mia ? "700" : "500");transition:background 0.15s">
+                                        <span style="font-size:14px;width:20px;text-align:center">@mi.Icon</span>
+                                        @mi.Label
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </nav>
+        </div>
+
+        <!-- Sag: Bildirim + Kullanici + Cikis -->
+        <div style="display:flex;align-items:center;gap:8px">
+            <NotificationBell />
+            <div style="font-size:10px;color:#64748b;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                @Session.RoleName — @(Session.CurrentUser?.FullName ?? "")
+            </div>
+            <button @onclick='() => Nav.NavigateTo("/change-password")'
+                    style="padding:5px 10px;background:rgba(148,163,184,0.07);color:#94a3b8;border:1px solid rgba(255,255,255,0.07);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                Şifre
+            </button>
+            <button @onclick="DoLogout"
+                    style="padding:5px 10px;background:rgba(239,68,68,0.08);color:#f87171;border:1px solid rgba(239,68,68,0.2);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                Çıkış
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool showManageMenu = false;
+    private string currentPath = "/";
+
+    private record NavItem(string Icon, string Label, string Route);
+
+    private readonly NavItem[] mainItems = new[]
+    {
+        new NavItem("🏠", "Ana Sayfa", "/"),
+        new NavItem("📊", "Raporlar", "/reports"),
+        new NavItem("🏛", "Eczane Analizi", "/eczaneler"),
+        new NavItem("🔔", "Bildirimler", "/notifications"),
+    };
+
+    private readonly NavItem orgItem = new("🏢", "Organizasyon", "/organization");
+    private readonly NavItem photoReviewItem = new("📷", "Foto Kontrol", "/photo-review");
+    private readonly NavItem photoUploadItem = new("📷", "Fotoğraf Yükle", "/photos");
+    private readonly NavItem bolgeAnalizItem = new("🗺", "Bölge Analizi", "/bolgem");
+    private readonly NavItem turkiyeAnalizItem = new("🌐", "Overview", "/overview");
+    private readonly NavItem tasksItem = new("📋", "Görevler", "/gorevler");
+
+    private readonly NavItem[] manageItems = new[]
+    {
+        new NavItem("🧮", "Hesaplama", "/calculate"),
+        new NavItem("📈", "Etkinlik Analizi", "/activity"),
+        new NavItem("📥", "Veri Yükle", "/import"),
+        new NavItem("📅", "Dönemler", "/periods"),
+        new NavItem("⚖️", "Scorecard", "/scorecard"),
+        new NavItem("💰", "Prim Ayarları", "/prim-config"),
+        new NavItem("🗺️", "Brick", "/bricks"),
+        new NavItem("📷", "Foto Kontrol", "/photo-review"),
+        new NavItem("🖥️", "Kontrol Paneli", "/panel"),
+    };
+
+    private static readonly string[] manageRoutes = new[]
+    {
+        "/calculate", "/activity", "/import", "/periods", "/scorecard", "/prim-config", "/bricks", "/photo-review", "/panel"
+    };
+
+    private IEnumerable<NavItem> visibleItems
+    {
+        get
+        {
+            foreach (var item in mainItems)
+                yield return item;
+            // Bölge analiz sayfası BM'ye özel (infografik + ST/sipariş/eczane analizi).
+            if (Session.IsBM)
+                yield return bolgeAnalizItem;
+            // Görevler: BM atar/takip eder, ST görür/günceller.
+            if (Session.IsBM || Session.IsST)
+                yield return tasksItem;
+            // Türkiye Analizi (Kanal Müdürü) — tepeden Türkiye→Bölge→ST→ürün drill-down.
+            if (Session.CanViewAll)
+                yield return turkiyeAnalizItem;
+            if (Session.CanViewAll)
+                yield return orgItem;
+            // ST: kendi saha fotoğraflarını ayrı sayfadan yükler.
+            if (Session.IsST)
+                yield return photoUploadItem;
+            // BM: Yönetim menüsü yok; foto kontrolü ana menüden erişir.
+            if (Session.IsBM)
+                yield return photoReviewItem;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        UpdatePath();
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? _, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        UpdatePath();
+        showManageMenu = false;
+        StateHasChanged();
+    }
+
+    private void UpdatePath()
+    {
+        currentPath = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
+        if (string.IsNullOrEmpty(currentPath)) currentPath = "/";
+    }
+
+    private bool IsActive(string route)
+    {
+        if (route == "/") return currentPath == "/";
+        return currentPath == route || currentPath.StartsWith(route + "/");
+    }
+
+    private void Navigate(string route)
+    {
+        showManageMenu = false;
+        Nav.NavigateTo(route);
+    }
+
+    private void ToggleManageMenu() => showManageMenu = !showManageMenu;
+    private void CloseManageMenu() => showManageMenu = false;
+
+    private async Task DoLogout()
+    {
+        await Session.LogoutAsync(SessionStorage);
+        await Session.ClearSessionAsync(SessionStorage);
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

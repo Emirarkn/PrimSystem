@@ -1,0 +1,217 @@
+@page "/prim-config"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject CalculationService CalcSvc
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+    <div style="max-width:900px;margin:0 auto;padding:24px">
+
+        <div style="margin-bottom:18px">
+            <div style="font-size:18px;font-weight:700;color:#f1f5f9">Prim Yapılandırması</div>
+            <div style="font-size:12px;color:#475569">Skor kademeleri ve rol bazlı taban tutarlar. Prim = taban tutar × kademe çarpanı (hak ediş varsa).</div>
+        </div>
+
+        @if (!Session.CanManage)
+        {
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px;color:#ef4444;font-size:13px">
+                Bu sayfa yalnızca yöneticiler içindir.
+            </div>
+            return;
+        }
+
+        @if (!string.IsNullOrEmpty(msg))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;color:#10b981;font-size:13px">@msg</div>
+        }
+        @if (!string.IsNullOrEmpty(errorMsg))
+        {
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;color:#ef4444;font-size:13px">@errorMsg</div>
+        }
+
+        <!-- GÖRÜNTÜLEME MODU -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:16px">
+            <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:8px">Görüntüleme Modu</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px">Çeyrek verisi henüz tam değilken yalnız satış başarısını yayınlamak için kullanılır. Açıkken tüm ST/Bölge Müdürü panolarında ve raporlarda yalnız satış skoru gösterilir; Ruta/Dağıtım/Sipariş ve final skor gizlenir. Başarı skoru = satış başarı oranı, gate %85.</div>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#cbd5e1;font-size:13px">
+                <input type="checkbox" @bind="salesOnlyMode" style="width:16px;height:16px;cursor:pointer" />
+                Yalnız satış skoru göster — satış/hedef realizasyon oranı (diğer KPI'lar ve final skor gizli)
+            </label>
+            <button @onclick="SaveDisplayMode" style="margin-top:14px;padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Görüntüleme Modunu Kaydet</button>
+        </div>
+
+        <!-- RUN-RATE (DÖNEM ORANLAMA) MODU -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:16px">
+            <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:8px">Run-rate (Dönem Oranlama)</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px">Hedef 3 aylık ama sell-out yalnız 2 ay yüklüyse realizasyon yapay olarak düşük çıkar. Açıkken hedef, <strong>satış verisi olan dönem sayısı / çeyrekteki toplam dönem</strong> oranıyla küçültülür (örn. 2/3). Bu, hesaplamayı (skor + gate + prim) etkiler. KAPALI (varsayılan) = ham 3 aylık hedef. Değişiklik sonrası <strong>yeniden hesaplama</strong> gerekir.</div>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#cbd5e1;font-size:13px">
+                <input type="checkbox" @bind="runRateMode" style="width:16px;height:16px;cursor:pointer" />
+                Run-rate uygula — hedefi satış verisi olan dönem oranına göre orantıla
+            </label>
+            <button @onclick="SaveRunRateMode" style="margin-top:14px;padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Run-rate Modunu Kaydet</button>
+        </div>
+
+        <!-- ROL TABAN TUTARLARI -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:16px">
+            <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:12px">Rol Bazlı Taban Tutar (TL)</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;color:#cbd5e1">
+                <thead>
+                    <tr style="color:#64748b;text-align:left;font-size:11px;text-transform:uppercase">
+                        <th style="padding:6px 8px">Rol</th>
+                        <th style="padding:6px 8px;width:200px">Taban Tutar (TL)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var role in roles)
+                    {
+                        <tr style="border-top:1px solid #1e293b">
+                            <td style="padding:8px">@role.Name</td>
+                            <td style="padding:8px">
+                                <input type="number" step="0.01" min="0" @bind="roleBase[role.RoleId]"
+                                       style="width:160px;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;outline:none" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <button @onclick="SaveBases" style="margin-top:12px;padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Taban Tutarları Kaydet</button>
+        </div>
+
+        <!-- KADEME TABLOSU -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <div style="font-size:15px;font-weight:600;color:#f1f5f9">Skor Kademeleri</div>
+                <button @onclick="AddTier" style="padding:5px 12px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">+ Kademe Ekle</button>
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:10px">Skor aralığı dahil sınırlarla değerlendirilir (Min ≤ skor ≤ Max). Çarpan: taban tutarın oranı (ör. 1.0 = %100).</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;color:#cbd5e1">
+                <thead>
+                    <tr style="color:#64748b;text-align:left;font-size:11px;text-transform:uppercase">
+                        <th style="padding:6px 8px">Min Skor</th>
+                        <th style="padding:6px 8px">Max Skor</th>
+                        <th style="padding:6px 8px">Çarpan</th>
+                        <th style="padding:6px 8px">Aktif</th>
+                        <th style="padding:6px 8px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in tiers)
+                    {
+                        <tr style="border-top:1px solid #1e293b">
+                            <td style="padding:8px"><input type="number" step="0.0001" @bind="t.MinScore" style="width:100px;padding:6px 8px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:13px" /></td>
+                            <td style="padding:8px"><input type="number" step="0.0001" @bind="t.MaxScore" style="width:100px;padding:6px 8px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:13px" /></td>
+                            <td style="padding:8px"><input type="number" step="0.0001" @bind="t.Multiplier" style="width:90px;padding:6px 8px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:13px" /></td>
+                            <td style="padding:8px"><input type="checkbox" @bind="t.IsActive" /></td>
+                            <td style="padding:8px"><button @onclick="() => RemoveTier(t)" style="padding:4px 10px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:12px;cursor:pointer">Sil</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <button @onclick="SaveTiers" style="margin-top:12px;padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Kademeleri Kaydet</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Role> roles = new();
+    private Dictionary<int, decimal> roleBase = new();
+    private List<PrimTier> tiers = new();
+    private bool salesOnlyMode = false;
+    private bool runRateMode = false;
+    private string msg = "";
+    private string errorMsg = "";
+    private bool _sessionChecked = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (Session.CanManage) await LoadData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        using var db = DbFactory.CreateDbContext();
+        roles = await db.Roles.OrderBy(r => r.RoleId).ToListAsync();
+        var bases = await CalcSvc.GetRolePrimBasesAsync();
+        roleBase = roles.ToDictionary(r => r.RoleId, r => bases.TryGetValue(r.RoleId, out var v) ? v : 0m);
+        tiers = await CalcSvc.GetPrimTiersAsync();
+        if (!tiers.Any()) AddTier();
+        salesOnlyMode = await CalcSvc.GetSalesOnlyModeAsync();
+        runRateMode = await CalcSvc.GetRunRateModeAsync();
+    }
+
+    private async Task SaveDisplayMode()
+    {
+        msg = errorMsg = "";
+        try
+        {
+            await CalcSvc.SetSalesOnlyModeAsync(salesOnlyMode, Session.RequireUserId());
+            msg = salesOnlyMode
+                ? "Görüntüleme modu kaydedildi: Yalnız satış skoru gösteriliyor."
+                : "Görüntüleme modu kaydedildi: Tüm KPI'lar ve final skor gösteriliyor.";
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); }
+        catch (Exception ex) { errorMsg = "Hata: " + ex.Message; }
+    }
+
+    private async Task SaveRunRateMode()
+    {
+        msg = errorMsg = "";
+        try
+        {
+            await CalcSvc.SetRunRateModeAsync(runRateMode, Session.RequireUserId());
+            msg = runRateMode
+                ? "Run-rate modu açıldı. Hedef, satış verisi olan dönem oranına göre orantılanacak — yeniden hesaplama gerekir."
+                : "Run-rate modu kapatıldı. Ham 3 aylık hedef kullanılacak — yeniden hesaplama gerekir.";
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); }
+        catch (Exception ex) { errorMsg = "Hata: " + ex.Message; }
+    }
+
+    private void AddTier() => tiers.Add(new PrimTier { MinScore = 0.85m, MaxScore = 1.05m, Multiplier = 1.0m, IsActive = true });
+    private void RemoveTier(PrimTier t) => tiers.Remove(t);
+
+    private async Task SaveBases()
+    {
+        msg = errorMsg = "";
+        try
+        {
+            foreach (var kv in roleBase)
+                await CalcSvc.SaveRolePrimBaseAsync(kv.Key, kv.Value, Session.RequireUserId());
+            msg = "Taban tutarlar kaydedildi.";
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); }
+        catch (Exception ex) { errorMsg = "Hata: " + ex.Message; }
+    }
+
+    private async Task SaveTiers()
+    {
+        msg = errorMsg = "";
+        if (tiers.Any(t => t.MinScore > t.MaxScore)) { errorMsg = "Bir kademede Min skor Max'tan büyük olamaz."; return; }
+        try
+        {
+            await CalcSvc.SavePrimTiersAsync(tiers, Session.RequireUserId());
+            msg = "Kademeler kaydedildi.";
+        }
+        catch (UnauthorizedAccessException) { Nav.NavigateTo("/login"); }
+        catch (Exception ex) { errorMsg = "Hata: " + ex.Message; }
+    }
+
+    [Inject] private IDbContextFactory<AppDbContext> DbFactory { get; set; } = default!;
+}

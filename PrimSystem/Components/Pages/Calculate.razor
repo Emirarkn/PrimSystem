@@ -1,0 +1,771 @@
+@page "/calculate"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.JSInterop
+@inject CalculationService CalcSvc
+@inject ExportService ExportSvc
+@inject NotificationService NotifSvc
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ProtectedSessionStorage SessionStorage
+@inject IJSRuntime JS
+@inject ILogger<Calculate> Logger
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+
+<div style="min-height:100vh;background:#080e1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:1280px;margin:0 auto;padding:24px">
+
+        <!-- HESAPLAMA KONTROL -->
+        <div style="background:rgba(17,24,39,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px 22px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <select @bind="selectedYear" @bind:after="OnPeriodChanged" style="padding:8px 14px;background:#0a0f1a;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:13px;font-weight:600">
+                    @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+                <select @bind="selectedQuarter" @bind:after="OnPeriodChanged" style="padding:8px 14px;background:#0a0f1a;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:13px;font-weight:600">
+                    <option value="Q1">Q1 (Oca-Mar)</option>
+                    <option value="Q2">Q2 (Nis-Haz)</option>
+                    <option value="Q3">Q3 (Tem-Eyl)</option>
+                    <option value="Q4">Q4 (Eki-Ara)</option>
+                </select>
+
+                @if (Session.CanManage)
+                {
+                    <button @onclick="RunCalculation" disabled="@isCalculating"
+                            style="padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
+                        @(isCalculating ? "⏳ Hesaplanıyor..." : "▶ Hesapla")
+                    </button>
+                }
+
+                <button @onclick="LoadResults" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+                    Sonuçları Getir
+                </button>
+
+                @if (summaries.Any())
+                {
+                    <button @onclick="DownloadExcel" disabled="@isExporting"
+                            style="padding:8px 18px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+                        @(isExporting ? "⏳ Hazırlanıyor..." : "⬇ Excel İndir")
+                    </button>
+                }
+
+                @if (Session.CanManage && summaries.Any())
+                {
+                    var published = summaries.FirstOrDefault()?.Calc.IsPublished ?? false;
+                    var publishedAt = summaries.FirstOrDefault()?.Calc.PublishedAt;
+                    if (published)
+                    {
+                        <span style="padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3)">
+                            🟢 Yayında · @publishedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </span>
+                        <button @onclick="DoUnpublish"
+                                style="padding:8px 16px;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                            ⏸ Yayını Durdur
+                        </button>
+                    }
+                    else
+                    {
+                        <button @onclick="DoPublish"
+                                style="padding:8px 16px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.35);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                            📤 Yayınla
+                        </button>
+                    }
+                }
+
+                @if (Session.CanManage)
+                {
+                    <button @onclick="OpenLeaderboardModal"
+                            style="padding:8px 16px;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                        📦 @(activeLeaderboard != null ? "Sipariş Leaderboard ●" : "Sipariş Leaderboard")
+                    </button>
+                }
+            </div>
+
+            @if (calcResult != null && !string.IsNullOrEmpty(calcResult.Error))
+            {
+                <span style="color:#ef4444;font-size:12px">@calcResult.Error</span>
+            }
+            @if (calcResult != null && calcResult.Success)
+            {
+                <span style="color:#10b981;font-size:12px;font-weight:600">✓ @calcResult.STCount ST hesaplandı · @calcResult.PassedCount geçti</span>
+            }
+        </div>
+
+        <CalcFreshnessBanner Year="selectedYear" Quarter="@selectedQuarter" Freshness="freshness" OnRecalculate="RunCalculation" />
+
+        <!-- VERİ EKSİK ONAY PANELİ -->
+        @if (showCalcConfirm)
+        {
+            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:12px;padding:16px;margin-bottom:14px">
+                <div style="font-size:13px;font-weight:700;color:#ef4444;margin-bottom:8px">⚠ Veri eksik — hesaplama yanıltıcı sonuç üretebilir</div>
+                <div style="font-size:12px;color:#f59e0b;margin-bottom:12px;display:flex;flex-direction:column;gap:4px">
+                    @foreach (var issue in calcConfirmIssues)
+                    {
+                        <div>• @issue</div>
+                    }
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button @onclick="ConfirmCalculation"
+                            style="padding:7px 16px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+                        Yine de Hesapla
+                    </button>
+                    <button @onclick="CancelCalculation"
+                            style="padding:7px 16px;background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:8px;font-size:12px;cursor:pointer">
+                        Vazgeç — önce veriyi yükleyeceğim
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- VERİ DURUMU -->
+        @if (dataCheck != null)
+        {
+            var targetsOk  = dataCheck.TargetCount > 0;
+            var sellOutOk  = dataCheck.SellOutCount > 0;
+            var periodsOk  = dataCheck.PeriodCount == 3;
+            var bricksOk   = dataCheck.UserBricksCount > 0;
+            var weightsOk  = dataCheck.WeightsCount > 0;
+            var anyProblem = !targetsOk || !sellOutOk || !periodsOk || !bricksOk || !weightsOk;
+
+            <div style="background:#111827;border:1px solid @(anyProblem ? "rgba(239,68,68,0.4)" : "rgba(16,185,129,0.3)");border-radius:10px;padding:12px 16px;margin-bottom:16px">
+                <div style="font-size:11px;font-weight:700;color:@(anyProblem ? "#ef4444" : "#10b981");margin-bottom:8px">
+                    @(anyProblem ? "⚠ Veri Durumu — Sorun Tespit Edildi" : "✓ Veri Durumu")
+                </div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap">
+                    <span style="font-size:11px;color:@(periodsOk ? "#10b981" : "#ef4444")">@(periodsOk?"✓":"✗") Dönem: @dataCheck.PeriodCount/3</span>
+                    <span style="font-size:11px;color:@(targetsOk ? "#10b981" : "#ef4444")">@(targetsOk?"✓":"✗") Hedef: @dataCheck.TargetCount kayıt</span>
+                    <span style="font-size:11px;color:@(sellOutOk ? "#10b981" : "#f59e0b")">@(sellOutOk?"✓":"⚠") Sell-Out: @dataCheck.SellOutCount kayıt</span>
+                    <span style="font-size:11px;color:@(bricksOk ? "#10b981" : "#ef4444")">@(bricksOk?"✓":"✗") Brick Ataması: @dataCheck.UserBricksCount aktif</span>
+                    <span style="font-size:11px;color:@(weightsOk ? "#10b981" : "#ef4444")">@(weightsOk?"✓":"✗") Scorecard: @dataCheck.WeightsCount ağırlık</span>
+                    <span style="font-size:11px;color:#64748b">ST: @dataCheck.STCount kişi</span>
+                </div>
+                @if (!targetsOk)
+                {
+                    <div style="margin-top:8px;font-size:11px;color:#ef4444;background:rgba(239,68,68,0.08);border-radius:6px;padding:7px 10px">
+                        Bu dönem için <strong>hedef kaydı bulunamadı</strong>. Import sayfasına gidin → Hedef bölümünde yıl olarak <strong>@selectedYear</strong> seçin → dosyayı yeniden yükleyin.
+                        <a href="/import" style="color:#3b82f6;margin-left:6px;text-decoration:none;font-weight:600">→ Import Sayfası</a>
+                    </div>
+                }
+                @if (!periodsOk && dataCheck.PeriodCount == 0)
+                {
+                    <div style="margin-top:6px;font-size:11px;color:#ef4444">
+                        @selectedYear @selectedQuarter dönemleri veritabanında tanımlı değil. Periods tablosunu kontrol edin.
+                    </div>
+                }
+                @if (!bricksOk)
+                {
+                    <div style="margin-top:6px;font-size:11px;color:#ef4444">
+                        Aktif brick ataması yok. ST'lere brick atanmadan Sell-Out verileri eşleşemez.
+                    </div>
+                }
+            </div>
+        }
+
+        @if (summaries.Any())
+        {
+            <!-- ÖZET KARTLAR -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+                @{
+                    var eligible = summaries.Where(s => s.Calc.IsEligible).ToList();
+                    var avgScore = eligible.Any() ? eligible.Average(s => (double)(s.Calc.FinalScore ?? s.Calc.TotalScore)) : 0;
+                    var passedCount = eligible.Count(s => s.Calc.PassedGate);
+                    var failedCount = eligible.Count(s => !s.Calc.PassedGate);
+                    var newCount = summaries.Count(s => !s.Calc.IsEligible);
+                    var passRate = eligible.Any() ? (double)passedCount / eligible.Count * 100 : 0;
+                }
+                <div style="background:linear-gradient(135deg,rgba(99,102,241,0.12),rgba(59,130,246,0.06));border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">📈 Ortalama Puan</div>
+                    <div style="font-size:28px;font-weight:800;color:#818cf8;font-family:monospace">%@((avgScore * 100).ToString("F1"))</div>
+                    <div style="height:3px;background:rgba(99,102,241,0.15);border-radius:2px;margin-top:8px;overflow:hidden">
+                        <div style="height:100%;width:@((Math.Min(avgScore*100,100)).ToString("F0"))%;background:#6366f1;border-radius:2px"></div>
+                    </div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.06));border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;color:#34d399;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">✅ Geçit Geçen</div>
+                    <div style="font-size:28px;font-weight:800;color:#10b981;font-family:monospace">@passedCount<span style="font-size:14px;font-weight:600;color:#065f46">/@eligible.Count</span></div>
+                    <div style="font-size:10px;color:#34d399;margin-top:4px">Başarı oranı %@(passRate.ToString("F0"))</div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(220,38,38,0.05));border:1px solid rgba(239,68,68,0.22);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">❌ Geçit Kalan</div>
+                    <div style="font-size:28px;font-weight:800;color:#ef4444;font-family:monospace">@failedCount</div>
+                    @if (newCount > 0)
+                    {
+                        <div style="font-size:10px;color:#f59e0b;margin-top:4px">+@newCount prim dışı</div>
+                    }
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(217,119,6,0.05));border:1px solid rgba(245,158,11,0.22);border-radius:12px;padding:16px">
+                    <div style="font-size:9px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">📅 Dönem</div>
+                    <div style="font-size:26px;font-weight:800;color:#f59e0b">@selectedQuarter</div>
+                    <div style="font-size:13px;color:#92400e;font-weight:600">@selectedYear · @summaries.Count ST</div>
+                </div>
+            </div>
+
+            <!-- BÖLGE BAZINDA SONUÇLAR -->
+            @foreach (var region in summaries.Select(s => s.Calc.User?.Region?.Name ?? "Bölge Yok").Distinct())
+            {
+                var regionSummaries = summaries.Where(s => (s.Calc.User?.Region?.Name ?? "Bölge Yok") == region).ToList();
+                <div style="margin-bottom:14px">
+                    <div style="font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+                        @region
+                        <span style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(59,130,246,0.12);color:#3b82f6">@regionSummaries.Count ST</span>
+                    </div>
+
+                    @foreach (var s in regionSummaries.OrderByDescending(x => x.Calc.FinalScore ?? x.Calc.TotalScore))
+                    {
+                        var borderColor = !s.Calc.IsEligible ? "rgba(245,158,11,0.3)" : s.Calc.PassedGate ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)";
+                        var bgColor = !s.Calc.IsEligible ? "rgba(245,158,11,0.04)" : s.Calc.PassedGate ? "rgba(16,185,129,0.04)" : "rgba(239,68,68,0.04)";
+                        var stScore = (s.Calc.FinalScore ?? s.Calc.TotalScore) * 100;
+                        <div @key="s.Calc.CalcId" style="background:@bgColor;border:1px solid @borderColor;border-radius:12px;margin-bottom:6px;overflow:hidden">
+                            <!-- ST Başlık -->
+                            <div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
+                                 @onclick="() => ToggleExpand(s.Calc.CalcId)">
+                                <div style="display:flex;align-items:center;gap:10px">
+                                    <span style="font-weight:600;font-size:13px;color:#f1f5f9">@s.Calc.User?.FullName</span>
+                                    <span style="font-size:10px;color:#64748b">BM: @(summaries.FirstOrDefault(x => x.Calc.User?.UserId == s.Calc.User?.ManagerId)?.Calc.User?.FullName ?? GetManagerName(s.Calc.User?.ManagerId))</span>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px">
+                                    @if (s.Calc.RutaScore.HasValue)
+                                    {
+                                        <span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:@(s.Calc.RutaScore >= 0.9m ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(s.Calc.RutaScore >= 0.9m ? "#10b981" : "#ef4444")">
+                                            Ruta @((s.Calc.RutaScore.Value * 100).ToString("F0"))%
+                                        </span>
+                                    }
+                                    @if (s.Calc.OrderScore.HasValue)
+                                    {
+                                        <span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:@(s.Calc.OrderScore >= 0.9m ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(s.Calc.OrderScore >= 0.9m ? "#10b981" : "#f59e0b")">
+                                            Strike @((s.Calc.OrderScore.Value * 100).ToString("F0"))%
+                                        </span>
+                                    }
+                                    @{
+                                        var stResult2 = calcResult?.STResults.FirstOrDefault(r => r.UserId == s.Calc.UserId);
+                                    }
+                                    @if ((s.Calc.FinalScore ?? s.Calc.TotalScore) == 0 && s.Calc.IsEligible && stResult2 != null)
+                                    {
+                                        if (stResult2.ProductsWithTarget == 0)
+                                        {
+                                            <span title="Hedef dosyasında bu ST'ye ait kayıt yok" style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3)">Hedef Yok</span>
+                                        }
+                                        else if (stResult2.ProductsWithTarget > 0 && stResult2.ProductsWithSellOut == 0)
+                                        {
+                                            <span title="Hedef var ama bu ST için Sell-Out verisi eşleşmedi (UserBricks?)" style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)">Satış Yok</span>
+                                        }
+                                    }
+                                    @if (!s.Calc.IsEligible)
+                                    {
+                                        <span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(245,158,11,0.12);color:#f59e0b">@s.Calc.IneligibleReason</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:@(s.Calc.PassedGate ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(s.Calc.PassedGate ? "#10b981" : "#ef4444")">
+                                            @(s.Calc.PassedGate ? "GEÇTİ" : "KALDI")
+                                        </span>
+                                    }
+                                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                                        <span style="font-size:20px;font-weight:800;font-family:monospace;color:@(!s.Calc.IsEligible ? "#f59e0b" : s.Calc.PassedGate ? "#10b981" : "#ef4444")">
+                                            %@stScore.ToString("F1")
+                                        </span>
+                                        <div style="width:72px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+                                            <div style="height:100%;width:@(Math.Min(stScore,100).ToString("F0"))%;background:@(!s.Calc.IsEligible ? "#f59e0b" : s.Calc.PassedGate ? "#10b981" : "#ef4444");border-radius:2px"></div>
+                                        </div>
+                                        @if (s.Calc.PrimAmount.HasValue && s.Calc.PrimAmount.Value > 0)
+                                        {
+                                            <span style="font-size:12px;font-weight:700;color:#10b981" title="Hesaplanan prim">💰 @s.Calc.PrimAmount.Value.ToString("N2") ₺</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="font-size:11px;color:#64748b" title="Prim yok">— ₺</span>
+                                        }
+                                    </div>
+                                    <span style="font-size:10px;color:#475569">@(expandedCalcId == s.Calc.CalcId ? "▲" : "▼")</span>
+                                </div>
+                            </div>
+
+                            <!-- DETAY TABLO -->
+                            @if (expandedCalcId == s.Calc.CalcId)
+                            {
+                                <div style="padding:0 8px 8px">
+                                    <table style="width:100%;border-collapse:collapse;font-size:11px">
+                                        <thead>
+                                            <tr>
+                                                <th style="padding:7px 8px;text-align:left;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">GRUP</th>
+                                                <th style="padding:7px 8px;text-align:left;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">ÜRÜN</th>
+                                                <th style="padding:7px 8px;text-align:right;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b" title="Bu sonuç hesaplanırken kullanılan ağırlık">AĞ.*</th>
+                                                <th style="padding:7px 8px;text-align:right;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">HEDEF</th>
+                                                <th style="padding:7px 8px;text-align:right;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">GERÇ.</th>
+                                                <th style="padding:7px 8px;text-align:right;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">ORAN</th>
+                                                <th style="padding:7px 8px;text-align:right;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">CAP</th>
+                                                <th style="padding:7px 8px;text-align:right;color:#64748b;font-size:9px;border-bottom:1px solid #1e293b">PUAN</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var d in s.Details)
+                                            {
+                                                <tr style="border-bottom:1px solid #1e293b15">
+                                                    <td style="padding:5px 8px">
+                                                        <span style="font-size:9px;font-weight:700;color:@(d.Product?.ProductGroup == "OTC" ? "#10b981" : "#f59e0b")">@d.Product?.ProductGroup</span>
+                                                    </td>
+                                                    <td style="padding:5px 8px;font-weight:500;color:#f1f5f9">@d.Product?.Name</td>
+                                                    <td style="padding:5px 8px;text-align:right;color:#94a3b8">
+                                                        @WeightForDetail(s, d)
+                                                    </td>
+                                                    <td style="padding:5px 8px;text-align:right;font-family:monospace;color:#f1f5f9">@(d.TargetQty > 0 ? d.TargetQty.ToString("F1") : "—")</td>
+                                                    <td style="padding:5px 8px;text-align:right;font-family:monospace;color:#f1f5f9">@(d.ActualQty > 0 ? d.ActualQty.ToString("F0") : "—")</td>
+                                                    <td style="padding:5px 8px;text-align:right;font-family:monospace;color:@(d.IsCapped ? "#f59e0b" : d.Rate >= 0.85m ? "#10b981" : d.Rate > 0 ? "#ef4444" : "#64748b")">
+                                                        @(d.TargetQty > 0 ? $"%{(d.Rate * 100):F1}" : "—")
+                                                        @(d.IsCapped ? " ⇣" : "")
+                                                    </td>
+                                                    <td style="padding:5px 8px;text-align:right;font-family:monospace;color:@(d.IsCapped ? "#f59e0b" : "#64748b");font-size:10px">
+                                                        @(d.IsCapped ? $"%{(d.CappedRate * 100):F0} ⇣" : "—")
+                                                    </td>
+                                                    <td style="padding:5px 8px;text-align:right;font-weight:600;font-family:monospace;color:#f1f5f9">@d.Score.ToString("F4")</td>
+                                                </tr>
+                                            }
+                                            <tr style="border-top:2px solid #1e293b">
+                                                <td colspan="7" style="padding:7px 8px;font-weight:700;font-size:12px;text-align:right;color:#f1f5f9">SATIŞ SKORU</td>
+                                                <td style="padding:7px 8px;text-align:right;font-weight:700;font-size:13px;font-family:monospace;color:#3b82f6">@s.Calc.TotalScore.ToString("F4")</td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="4" style="padding:5px 8px;font-size:11px;text-align:right;color:#94a3b8">Ruta Uyum</td>
+                                                <td colspan="2" style="padding:5px 8px;text-align:right;font-family:monospace;font-size:11px;color:@(s.Calc.RutaScore.HasValue && s.Calc.RutaScore >= 0.85m ? "#10b981" : "#ef4444")">@(s.Calc.RutaScore.HasValue ? $"%{(s.Calc.RutaScore.Value * 100):F1}" : "—")</td>
+                                                <td style="padding:5px 8px;text-align:right;font-size:10px;color:#64748b">Dağıtım</td>
+                                                <td style="padding:5px 8px;text-align:right;font-family:monospace;font-size:11px;color:@(s.Calc.DistScore.HasValue && s.Calc.DistScore >= 0.85m ? "#10b981" : "#ef4444")">@(s.Calc.DistScore.HasValue ? $"%{(s.Calc.DistScore.Value * 100):F1}" : "—")</td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="4" style="padding:5px 8px;font-size:11px;text-align:right;color:#94a3b8">Strike Rate</td>
+                                                <td colspan="2" style="padding:5px 8px;text-align:right;font-family:monospace;font-size:11px;color:@(s.Calc.OrderScore.HasValue && s.Calc.OrderScore >= 0.85m ? "#10b981" : "#ef4444")">@(s.Calc.OrderScore.HasValue ? $"%{(s.Calc.OrderScore.Value * 100):F1}" : "—")</td>
+                                                <td style="padding:5px 8px;text-align:right;font-weight:700;font-size:11px;color:#f1f5f9">FİNAL</td>
+                                                <td style="padding:5px 8px;text-align:right;font-weight:700;font-size:14px;font-family:monospace;color:@(s.Calc.PassedGate ? "#10b981" : "#ef4444")">%@(((s.Calc.FinalScore ?? s.Calc.TotalScore) * 100).ToString("F1"))</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div style="padding:6px 8px 0;font-size:9px;color:#475569">
+                                        * <strong>AĞ.</strong> = bu sonuç hesaplanırken kullanılan ağırlık (dondurulmuş).
+                                        Scorecard'da sonradan değiştirdiyseniz ⚡ Aktifle ile yeniden hesaplayın.
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- BM ÖZETİ -->
+            <div style="background:rgba(17,24,39,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px 22px;margin-top:8px">
+                <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:10px">Bölge Müdürü Özeti</div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                        <tr>
+                            <th style="padding:7px 10px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">BM</th>
+                            <th style="padding:7px 10px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">BÖLGE</th>
+                            <th style="padding:7px 10px;text-align:center;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">ST</th>
+                            <th style="padding:7px 10px;text-align:center;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">ORT. PUAN</th>
+                            <th style="padding:7px 10px;text-align:center;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">GEÇEN/KALAN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var bm in bmUsers)
+                        {
+                            var bmSTs = summaries.Where(s => s.Calc.User?.ManagerId == bm.UserId && s.Calc.IsEligible).ToList();
+                            if (!bmSTs.Any()) continue;
+                            var bmAvg = bmSTs.Average(s => (double)(s.Calc.FinalScore ?? s.Calc.TotalScore));
+                            var bmPassed = bmSTs.Count(s => s.Calc.PassedGate);
+                            <tr style="border-bottom:1px solid #1e293b">
+                                <td style="padding:7px 10px;font-weight:600;color:#f1f5f9">@bm.FullName</td>
+                                <td style="padding:7px 10px;color:#94a3b8">@bm.Region?.Name</td>
+                                <td style="padding:7px 10px;text-align:center;color:#f1f5f9">@bmSTs.Count</td>
+                                <td style="padding:7px 10px;text-align:center;font-family:monospace;font-weight:600;color:@(bmAvg >= 0.85 ? "#10b981" : "#ef4444")">%@((bmAvg * 100).ToString("F1"))</td>
+                                <td style="padding:7px 10px;text-align:center">
+                                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(16,185,129,0.12);color:#10b981">@bmPassed</span>
+                                    @if (bmSTs.Count - bmPassed > 0)
+                                    {
+                                        <span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(239,68,68,0.1);color:#ef4444;margin-left:4px">@(bmSTs.Count - bmPassed)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (!isCalculating)
+        {
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:40px;text-align:center">
+                <div style="font-size:32px;margin-bottom:12px">📊</div>
+                <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:6px">Henüz Hesaplama Yapılmadı</div>
+                <div style="font-size:13px;color:#64748b">Yıl ve çeyrek seçip "Hesapla" butonuna basın veya "Sonuçları Getir" ile mevcut sonuçları görüntüleyin</div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Sipariş Leaderboard Modal -->
+@if (showLeaderboardModal)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center" @onclick="CloseLeaderboardModal">
+        <div style="background:#0f172a;border:1px solid rgba(99,102,241,0.4);border-radius:16px;padding:28px;width:460px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.6)" @onclick:stopPropagation>
+            <div style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:20px">📦 Sipariş Leaderboard Yayını</div>
+
+            @if (activeLeaderboard != null)
+            {
+                <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:12px;margin-bottom:16px">
+                    <div style="font-size:12px;color:#10b981;font-weight:600">🟢 Şu an yayında</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:4px">
+                        @(activeLeaderboard.Product?.Name ?? "Tüm ürünler")
+                        @if (activeLeaderboard.Year.HasValue) { <span> · @activeLeaderboard.Year @activeLeaderboard.Quarter</span> }
+                        else { <span> · Tüm zamanlar</span> }
+                        <br/>Yayın: @activeLeaderboard.PublishedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    </div>
+                    <button @onclick="DoStopLeaderboard" style="margin-top:10px;padding:6px 14px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+                        ⏸ Yayını Durdur
+                    </button>
+                </div>
+            }
+
+            <div style="margin-bottom:14px">
+                <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:6px">Ürün Filtresi</label>
+                <select @bind="lbProductId" style="width:100%;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:7px;padding:8px 10px;font-size:13px">
+                    <option value="">Tüm Ürünler</option>
+                    @foreach (var p in lbProducts)
+                    {
+                        <option value="@p.ProductId">@p.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+                <div>
+                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:6px">Yıl (boş = tümü)</label>
+                    <select @bind="lbYear" style="width:100%;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:7px;padding:8px 10px;font-size:13px">
+                        <option value="">Tüm Zamanlar</option>
+                        @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:6px">Çeyrek</label>
+                    <select @bind="lbQuarter" style="width:100%;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:7px;padding:8px 10px;font-size:13px">
+                        <option value="">Tüm Zamanlar</option>
+                        <option value="Q1">Q1</option>
+                        <option value="Q2">Q2</option>
+                        <option value="Q3">Q3</option>
+                        <option value="Q4">Q4</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+                <button @onclick="CloseLeaderboardModal" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #334155;border-radius:7px;font-size:13px;cursor:pointer">İptal</button>
+                <button @onclick="DoPublishLeaderboard" style="padding:8px 18px;background:#6366f1;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer">📤 Yayınla</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int selectedYear = DateTime.Now.Year;
+    private string selectedQuarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+    private bool isCalculating = false;
+    private bool isExporting = false;
+    private CalcResult? calcResult;
+    private List<CalcSummary> summaries = new();
+    private CalcFreshness? freshness; // brick ataması bayat / yayınlanmamış uyarısı
+    private List<User> bmUsers = new();
+    private List<ScorecardWeight> weights = new();
+    // CalcId → (ürün adı → hesaplamada kullanılan ağırlık); ConfigSnapshot'tan ayrıştırılır.
+    private Dictionary<int, Dictionary<string, int>> snapshotWeights = new();
+
+    // Detay tablosunun "AĞ." hücresi: önce hesaplamanın dondurduğu değer, yoksa deterministik canlı değer.
+    private int WeightForDetail(CalcSummary s, CalculationDetail d)
+    {
+        var name = d.Product?.Name;
+        if (!string.IsNullOrEmpty(name)
+            && snapshotWeights.TryGetValue(s.Calc.CalcId, out var map)
+            && map.TryGetValue(name, out var snapW))
+            return snapW;
+        return weights.FirstOrDefault(x => x.ProductId == d.ProductId)?.Weight ?? 0;
+    }
+    private int expandedCalcId = 0;
+    private DataCheckResult? dataCheck;
+
+    // Sipariş Leaderboard
+    private bool showLeaderboardModal = false;
+    private OrderLeaderboardPublish? activeLeaderboard;
+    private List<Product> lbProducts = new();
+    private string lbProductId = "";
+    private string lbYear = "";
+    private string lbQuarter = "";
+
+    private bool _sessionChecked = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = DbFactory.CreateDbContext();
+        bmUsers = await db.Users.Include(u => u.Region)
+            .Where(u => u.RoleId == 3 && u.IsActive && !u.IsDeleted)
+            .ToListAsync();
+        // Canlı ağırlıklar YALNIZ yedek (snapshot okunamazsa). Bir üründe çift aktif satır
+        // olabildiğinden seçim CalculationService ile AYNI kurala göre deterministik yapılır:
+        // en yeni ValidFrom, eşitse en büyük WeightId. (Eskiden sıralamasız FirstOrDefault
+        // en eski 2025 satırını getiriyor, ekran hesaptan farklı ağırlık gösteriyordu.)
+        weights = (await db.ScorecardWeights.Where(w => w.ValidTo == null).ToListAsync())
+            .GroupBy(w => w.ProductId)
+            .Select(g => g.OrderByDescending(w => w.ValidFrom).ThenByDescending(w => w.WeightId).First())
+            .ToList();
+        lbProducts = await db.Products.Where(p => p.IsActive && p.IsPrimEligible).OrderBy(p => p.Name).ToListAsync();
+        activeLeaderboard = await CalcSvc.GetActiveOrderLeaderboardAsync();
+        await LoadDataCheck();
+    }
+
+    private async Task LoadDataCheck()
+    {
+        dataCheck = await CalcSvc.CheckDataAsync(selectedYear, selectedQuarter);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (!Session.IsLoggedIn)
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+            await AutoSelectLatestPeriod();
+            await LoadResults();
+            StateHasChanged();
+        }
+    }
+
+    private async Task AutoSelectLatestPeriod()
+    {
+        if (!Session.IsLoggedIn) return;
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            var query = db.Calculations.AsQueryable();
+            if (!Session.CanManage)
+                query = query.Where(c => c.IsPublished);
+
+            var latest = await query
+                .GroupBy(c => new { c.Year, c.Quarter })
+                .Select(g => new { g.Key.Year, g.Key.Quarter })
+                .OrderByDescending(x => x.Year)
+                .ThenByDescending(x => x.Quarter)
+                .FirstOrDefaultAsync();
+
+            if (latest != null)
+            {
+                selectedYear = latest.Year;
+                selectedQuarter = latest.Quarter;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Veri kontrolü yüklenemedi, varsayılanlar korunuyor");
+        }
+    }
+
+    private async Task OnPeriodChanged()
+    {
+        summaries = new();
+        calcResult = null;
+        await LoadDataCheck();
+        await LoadResults();
+    }
+
+    private bool showCalcConfirm;
+    private List<string> calcConfirmIssues = new();
+
+    private async Task RunCalculation()
+    {
+        if (Session.CurrentUser == null) return;
+
+        // Veri eksikken yanlışlıkla sıfır-skorlu hesaplama yayın zincirine girmesin —
+        // kritik eksiklerde kullanıcıdan açık onay iste.
+        dataCheck = await CalcSvc.CheckDataAsync(selectedYear, selectedQuarter);
+        calcConfirmIssues.Clear();
+        if (dataCheck.PeriodCount < 3)
+            calcConfirmIssues.Add($"Dönem eksik: {selectedQuarter} için {dataCheck.PeriodCount}/3 ay tanımlı");
+        if (dataCheck.TargetCount == 0)
+            calcConfirmIssues.Add("Hiç Hedef verisi yok — satış skoru herkes için 0 çıkar");
+        if (dataCheck.SellOutCount == 0)
+            calcConfirmIssues.Add("Hiç Sell-Out verisi yok — satış skoru herkes için 0 çıkar");
+        if (calcConfirmIssues.Any())
+        {
+            showCalcConfirm = true;
+            StateHasChanged();
+            return;
+        }
+
+        await ProceedCalculation();
+    }
+
+    private async Task ConfirmCalculation()
+    {
+        showCalcConfirm = false;
+        await ProceedCalculation();
+    }
+
+    private void CancelCalculation()
+    {
+        showCalcConfirm = false;
+        calcConfirmIssues.Clear();
+    }
+
+    private async Task ProceedCalculation()
+    {
+        if (Session.CurrentUser == null) return;
+
+        isCalculating = true;
+        calcResult = null;
+        StateHasChanged();
+
+        try
+        {
+            calcResult = await CalcSvc.CalculateQuarterAsync(selectedYear, selectedQuarter, Session.CurrentUser.UserId);
+
+            if (calcResult.Success)
+            {
+                await LoadResults();
+                await LoadDataCheck();
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            calcResult = new CalcResult { Error = "Bu işlem için yetkiniz yok." };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Hesaplama başarısız ({Year} {Quarter})", selectedYear, selectedQuarter);
+            calcResult = new CalcResult { Error = "Hesaplama başarısız oldu. Lütfen tekrar deneyin." };
+        }
+        finally
+        {
+            isCalculating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadResults()
+    {
+        try
+        {
+            bool publishedOnly = !Session.CanManage;
+            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
+            summaries = await CalcSvc.GetResultsAsync(selectedYear, selectedQuarter, regionFilter, publishedOnly, userFilter);
+            freshness = Session.CanManage ? await CalcSvc.GetCalcFreshnessAsync(selectedYear, selectedQuarter) : null;
+
+            // Detay tablosundaki "AĞ." kolonu, hesaplamanın DONDURDUĞU ağırlığı göstersin.
+            // Snapshot her hesaplama için bir kez ayrıştırılır (satır başına değil).
+            snapshotWeights = summaries
+                .GroupBy(s => s.Calc.CalcId)
+                .ToDictionary(g => g.Key, g => CalculationService.ParseSnapshotWeights(g.First().Calc.ConfigSnapshot));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Sonuçlar yüklenemedi ({Year} {Quarter})", selectedYear, selectedQuarter);
+            calcResult ??= new CalcResult();
+            calcResult.Error = "Sonuç yüklenemedi. Lütfen tekrar deneyin.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task DoPublish()
+    {
+        await CalcSvc.PublishAsync(selectedYear, selectedQuarter, Session.CurrentUser!.UserId);
+        await LoadResults();
+
+        // Tüm ST ve BM'lere otomatik bildirim
+        var title = $"{selectedQuarter} {selectedYear} Prim Sonuçları Yayınlandı";
+        var msg = "Prim skorunuzu görüntülemek için ana sayfanızı ziyaret edin.";
+        await NotifSvc.SendToRoleAsync(4, title, msg, "Success", Session.CurrentUser!.UserId);
+        await NotifSvc.SendToRoleAsync(3, title, "Bölgenizdeki ST prim sonuçları yayınlandı.", "Success", Session.CurrentUser!.UserId);
+    }
+
+    private async Task DoUnpublish()
+    {
+        await CalcSvc.UnpublishAsync(selectedYear, selectedQuarter);
+        await LoadResults();
+    }
+
+    private async Task DownloadExcel()
+    {
+        isExporting = true;
+        StateHasChanged();
+        try
+        {
+            var bytes = await ExportSvc.ExportCalculationsAsync(selectedYear, selectedQuarter, Session.RequireUserId());
+            var fileName = $"Prim_{selectedYear}_{selectedQuarter}_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadBytes", fileName, bytes);
+        }
+        catch (Exception ex)
+        {
+            calcResult ??= new CalcResult();
+            Logger.LogError(ex, "Excel dışa aktarma başarısız ({Year} {Quarter})", selectedYear, selectedQuarter);
+            calcResult.Error = "Excel oluşturulamadı. Lütfen tekrar deneyin.";
+        }
+        finally
+        {
+            isExporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleExpand(int calcId)
+    {
+        expandedCalcId = expandedCalcId == calcId ? 0 : calcId;
+    }
+
+    private string GetManagerName(int? managerId)
+    {
+        if (!managerId.HasValue) return "";
+        return bmUsers.FirstOrDefault(b => b.UserId == managerId)?.FullName ?? "";
+    }
+
+    // ── Sipariş Leaderboard ───────────────────────────────────────────────────
+
+    private async Task OpenLeaderboardModal()
+    {
+        lbYear = "";
+        lbQuarter = "";
+        lbProductId = "";
+        activeLeaderboard = await CalcSvc.GetActiveOrderLeaderboardAsync();
+        showLeaderboardModal = true;
+    }
+
+    private void CloseLeaderboardModal() => showLeaderboardModal = false;
+
+    private async Task DoPublishLeaderboard()
+    {
+        int? pid = int.TryParse(lbProductId, out var v) ? v : (int?)null;
+        int? yr = int.TryParse(lbYear, out var y) ? y : (int?)null;
+        string? qtr = string.IsNullOrEmpty(lbQuarter) ? null : lbQuarter;
+        await CalcSvc.PublishOrderLeaderboardAsync(pid, yr, qtr, Session.CurrentUser!.UserId);
+        activeLeaderboard = await CalcSvc.GetActiveOrderLeaderboardAsync();
+        showLeaderboardModal = false;
+    }
+
+    private async Task DoStopLeaderboard()
+    {
+        await CalcSvc.StopOrderLeaderboardAsync(Session.CurrentUser!.UserId);
+        activeLeaderboard = null;
+        showLeaderboardModal = false;
+    }
+}

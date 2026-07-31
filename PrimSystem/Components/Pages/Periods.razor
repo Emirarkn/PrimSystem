@@ -1,0 +1,281 @@
+@page "/periods"
+@using PrimSystem.Data
+@using PrimSystem.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+
+@if (!Session.CanManage)
+{
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0f1a;color:#64748b;font-size:14px">
+        Bu sayfaya erişim yetkiniz yok.
+    </div>
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:900px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px">
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;color:#10b981;font-size:13px">@message</div>
+        }
+        @if (!string.IsNullOrEmpty(errorMsg))
+        {
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;color:#ef4444;font-size:13px">@errorMsg</div>
+        }
+
+        <!-- DÖNEM EKLEME -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px">
+            <div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:14px">Dönem Ekle</div>
+
+            <!-- Tüm yılı ekle -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1e293b">
+                <span style="font-size:12px;color:#94a3b8;font-weight:600">Yılın tümünü ekle:</span>
+                <select @bind="bulkYear" style="padding:7px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                    @for (int y = DateTime.Now.Year + 2; y >= DateTime.Now.Year - 3; y--)
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+                <button @onclick="AddFullYear" disabled="@isSaving"
+                        style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                    + 12 Ay Ekle
+                </button>
+            </div>
+
+            <!-- Tek ay ekle -->
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:12px;color:#94a3b8;font-weight:600">Tek ay ekle:</span>
+                <select @bind="singleYear" style="padding:7px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                    @for (int y = DateTime.Now.Year + 2; y >= DateTime.Now.Year - 3; y--)
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+                <select @bind="singleMonth" style="padding:7px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <option value="@m">@MonthName(m) (@m)</option>
+                    }
+                </select>
+                <button @onclick="AddSingleMonth" disabled="@isSaving"
+                        style="padding:7px 16px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                    + Ekle
+                </button>
+            </div>
+        </div>
+
+        <!-- MEVCUT DÖNEMLER -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+            <div style="padding:14px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:13px;font-weight:700;color:#f1f5f9">Mevcut Dönemler</span>
+                <span style="font-size:11px;color:#64748b">@periods.Count dönem</span>
+            </div>
+
+            @if (!periods.Any())
+            {
+                <div style="padding:40px;text-align:center;color:#64748b;font-size:13px">
+                    Henüz dönem yok. "12 Ay Ekle" ile başlayın.
+                </div>
+            }
+            else
+            {
+                <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                    @foreach (var yearGroup in periods.GroupBy(p => p.Year).OrderByDescending(g => g.Key))
+                    {
+                        var months = yearGroup.Select(p => p.Month).ToHashSet();
+                        var allMonths = Enumerable.Range(1, 12).ToList();
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                                <span style="font-size:13px;font-weight:700;color:#f1f5f9">@yearGroup.Key</span>
+                                <span style="font-size:10px;color:#64748b">@months.Count / 12 ay</span>
+                            </div>
+                            <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
+                                @foreach (var m in allMonths)
+                                {
+                                    var exists = months.Contains(m);
+                                    var period = yearGroup.FirstOrDefault(p => p.Month == m);
+                                    <div style="text-align:center">
+                                        <div style="padding:8px 4px;border-radius:7px;font-size:11px;font-weight:600;background:@(exists ? "rgba(16,185,129,0.12)" : "rgba(30,41,59,0.5)");color:@(exists ? "#10b981" : "#475569");border:1px solid @(exists ? "rgba(16,185,129,0.25)" : "rgba(30,41,59,0.8)")">
+                                            @MonthAbbr(m)
+                                        </div>
+                                        @if (exists && period != null)
+                                        {
+                                            <div style="font-size:9px;color:#475569;margin-top:2px">@period.Quarter</div>
+                                        }
+                                        else
+                                        {
+                                            <div style="font-size:9px;color:#1e293b;margin-top:2px">—</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- DÖNEM SİLME (sadece hedef bağlantısı olmayan dönemler) -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px">
+            <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px">Dönem Sil</div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <select @bind="deleteYear" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    @foreach (var y in periods.Select(p => p.Year).Distinct().OrderDescending())
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+                <select @bind="deleteMonth" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <option value="@m">@MonthName(m)</option>
+                    }
+                </select>
+                <button @onclick="DeletePeriod"
+                        style="padding:6px 14px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    Sil
+                </button>
+                <span style="font-size:10px;color:#475569">Not: Hedef kaydı olan dönemler silinemez.</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private List<Period> periods = new();
+    private bool isSaving = false;
+    private bool _sessionChecked = false;
+    private string message = "";
+    private string errorMsg = "";
+
+    private int bulkYear = DateTime.Now.Year;
+    private int singleYear = DateTime.Now.Year;
+    private int singleMonth = DateTime.Now.Month;
+    private int deleteYear = DateTime.Now.Year;
+    private int deleteMonth = DateTime.Now.Month;
+
+    protected override async Task OnInitializedAsync() => await LoadPeriods();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPeriods()
+    {
+        using var db = DbFactory.CreateDbContext();
+        periods = await db.Periods.OrderByDescending(p => p.Year).ThenByDescending(p => p.Month).ToListAsync();
+    }
+
+    private async Task AddFullYear()
+    {
+        isSaving = true; errorMsg = ""; message = "";
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            int added = 0;
+            var existing = await db.Periods.Where(p => p.Year == bulkYear).Select(p => p.Month).ToListAsync();
+            for (int m = 1; m <= 12; m++)
+            {
+                if (!existing.Contains(m))
+                {
+                    db.Periods.Add(new Period { Year = bulkYear, Month = m });
+                    added++;
+                }
+            }
+            if (added > 0)
+            {
+                await db.SaveChangesAsync();
+                await LoadPeriods();
+                message = $"{bulkYear} yılına {added} dönem eklendi.";
+            }
+            else
+            {
+                message = $"{bulkYear} yılının tüm dönemleri zaten mevcut.";
+            }
+        }
+        catch (Exception ex) { errorMsg = "Hata: " + ex.Message; }
+        finally { isSaving = false; _ = ClearMsg(); }
+    }
+
+    private async Task AddSingleMonth()
+    {
+        isSaving = true; errorMsg = ""; message = "";
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            var exists = await db.Periods.AnyAsync(p => p.Year == singleYear && p.Month == singleMonth);
+            if (exists)
+            {
+                errorMsg = $"{singleYear} {MonthName(singleMonth)} zaten mevcut.";
+            }
+            else
+            {
+                db.Periods.Add(new Period { Year = singleYear, Month = singleMonth });
+                await db.SaveChangesAsync();
+                await LoadPeriods();
+                message = $"{singleYear} {MonthName(singleMonth)} eklendi.";
+            }
+        }
+        catch (Exception ex) { errorMsg = "Hata: " + ex.Message; }
+        finally { isSaving = false; _ = ClearMsg(); }
+    }
+
+    private async Task DeletePeriod()
+    {
+        using var db = DbFactory.CreateDbContext();
+        errorMsg = ""; message = "";
+        var period = await db.Periods.FirstOrDefaultAsync(p => p.Year == deleteYear && p.Month == deleteMonth);
+        if (period == null) { errorMsg = "Bu dönem bulunamadı."; return; }
+
+        var hasTargets = await db.Targets.AnyAsync(t => t.PeriodId == period.PeriodId);
+        if (hasTargets) { errorMsg = $"{deleteYear} {MonthName(deleteMonth)} dönemine hedef kaydı bağlı — silinemez."; return; }
+
+        db.Periods.Remove(period);
+        await db.SaveChangesAsync();
+        await LoadPeriods();
+        message = $"{deleteYear} {MonthName(deleteMonth)} silindi.";
+        _ = ClearMsg();
+    }
+
+    private int _msgVer;
+    private async Task ClearMsg()
+    {
+        var v = ++_msgVer;
+        await Task.Delay(3500);
+        if (v == _msgVer) { message = ""; errorMsg = ""; await InvokeAsync(StateHasChanged); }
+    }
+
+    private static string MonthName(int m) => m switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık", _ => ""
+    };
+
+    private static string MonthAbbr(int m) => m switch
+    {
+        1 => "Oca", 2 => "Şub", 3 => "Mar", 4 => "Nis",
+        5 => "May", 6 => "Haz", 7 => "Tem", 8 => "Ağu",
+        9 => "Eyl", 10 => "Eki", 11 => "Kas", 12 => "Ara", _ => ""
+    };
+}

@@ -1,0 +1,161 @@
+@using PrimSystem.Services
+@using PrimSystem.Data
+@inject NotificationService NotifSvc
+@inject SessionState Session
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div style="position:relative">
+    <button @onclick="ToggleDropdown"
+            style="position:relative;padding:7px 10px;background:rgba(148,163,184,0.08);border:1px solid #1e293b;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:4px;color:#94a3b8">
+        <span style="font-size:16px">🔔</span>
+        @if (unreadCount > 0)
+        {
+            <span style="position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;background:#ef4444;border-radius:999px;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px">
+                @(unreadCount > 99 ? "99+" : unreadCount.ToString())
+            </span>
+        }
+    </button>
+
+    @if (showDropdown)
+    {
+        <!-- Backdrop -->
+        <div style="position:fixed;inset:0;z-index:998" @onclick="CloseDropdown"></div>
+
+        <!-- Dropdown -->
+        <div style="position:absolute;right:0;top:calc(100% + 6px);width:340px;background:#111827;border:1px solid #1e293b;border-radius:12px;z-index:999;box-shadow:0 8px 32px rgba(0,0,0,0.5);overflow:hidden">
+            <!-- Başlık -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #1e293b">
+                <span style="font-size:13px;font-weight:700;color:#f1f5f9">Bildirimler @(unreadCount > 0 ? $"({unreadCount})" : "")</span>
+                <div style="display:flex;gap:6px">
+                    @if (unreadCount > 0)
+                    {
+                        <button @onclick="MarkAll" style="padding:3px 8px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">
+                            Tümü Okundu
+                        </button>
+                    }
+                    <button @onclick='() => { CloseDropdown(); Nav.NavigateTo("/notifications"); }'
+                            style="padding:3px 8px;background:rgba(148,163,184,0.08);color:#94a3b8;border:1px solid #1e293b;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">
+                        Tümünü Gör
+                    </button>
+                </div>
+            </div>
+
+            <!-- Liste -->
+            @if (!preview.Any())
+            {
+                <div style="padding:24px;text-align:center;color:#64748b;font-size:13px">Bildirim yok</div>
+            }
+            else
+            {
+                <div style="max-height:360px;overflow-y:auto">
+                    @foreach (var n in preview)
+                    {
+                        var typeColor = n.Type switch {
+                            "Success" => "#10b981",
+                            "Warning" => "#f59e0b",
+                            "Error"   => "#ef4444",
+                            _         => "#3b82f6"
+                        };
+                        <div @key="n.NotifId"
+                             @onclick="() => ReadAndClose(n)"
+                             style="padding:10px 14px;border-bottom:1px solid #1e293b08;cursor:pointer;background:@(n.IsRead ? "transparent" : "#0d1a2d");display:flex;gap:10px;align-items:flex-start;transition:background 0.15s"
+                             @onmouseover="() => hoverNotifId = n.NotifId"
+                             @onmouseout="() => hoverNotifId = 0">
+                            <div style="width:7px;height:7px;border-radius:50%;background:@typeColor;margin-top:5px;flex-shrink:0;opacity:@(n.IsRead ? "0.3" : "1")"></div>
+                            <div style="flex:1;min-width:0">
+                                <div style="font-size:12px;font-weight:@(n.IsRead ? "400" : "600");color:@(n.IsRead ? "#94a3b8" : "#f1f5f9");margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@n.Title</div>
+                                @if (!string.IsNullOrEmpty(n.Message))
+                                {
+                                    <div style="font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@n.Message</div>
+                                }
+                                <div style="font-size:10px;color:#475569;margin-top:2px">@TimeAgo(n.CreatedAt)</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private int unreadCount = 0;
+    private List<Notification> preview = new();
+    private bool showDropdown = false;
+    private int hoverNotifId = 0;
+    private bool _firstRenderDone = false;
+
+    protected override void OnInitialized()
+    {
+        Session.OnChange += OnSessionChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _firstRenderDone = true;
+            if (Session.IsLoggedIn)
+                await Refresh();
+        }
+    }
+
+    private void OnSessionChanged()
+    {
+        if (Session.IsLoggedIn && _firstRenderDone)
+            InvokeAsync(Refresh);
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= OnSessionChanged;
+    }
+
+    public async Task Refresh()
+    {
+        if (!Session.IsLoggedIn) return;
+        unreadCount = await NotifSvc.GetUnreadCountAsync(Session.CurrentUser!.UserId);
+        if (showDropdown)
+            preview = await NotifSvc.GetPreviewAsync(Session.CurrentUser!.UserId);
+        StateHasChanged();
+    }
+
+    private async Task ToggleDropdown()
+    {
+        showDropdown = !showDropdown;
+        if (showDropdown && Session.IsLoggedIn)
+            preview = await NotifSvc.GetPreviewAsync(Session.CurrentUser!.UserId);
+    }
+
+    private void CloseDropdown() { showDropdown = false; }
+
+    private async Task ReadAndClose(Notification n)
+    {
+        if (!n.IsRead)
+        {
+            await NotifSvc.MarkReadAsync(n.NotifId, Session.CurrentUser!.UserId);
+            n.IsRead = true;
+            unreadCount = Math.Max(0, unreadCount - 1);
+        }
+        CloseDropdown();
+        Nav.NavigateTo("/notifications");
+    }
+
+    private async Task MarkAll()
+    {
+        await NotifSvc.MarkAllReadAsync(Session.CurrentUser!.UserId);
+        foreach (var n in preview) n.IsRead = true;
+        unreadCount = 0;
+    }
+
+    private static string TimeAgo(DateTime utcTime)
+    {
+        var diff = DateTime.UtcNow - utcTime;
+        if (diff.TotalMinutes < 1) return "az önce";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes} dk önce";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours} sa önce";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} gün önce";
+        return utcTime.ToLocalTime().ToString("dd.MM.yyyy");
+    }
+}

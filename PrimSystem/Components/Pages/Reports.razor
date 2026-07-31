@@ -1,0 +1,918 @@
+@page "/reports"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using Microsoft.JSInterop
+@using Microsoft.EntityFrameworkCore
+@inject CalculationService CalcSvc
+@inject NotificationService NotifSvc
+@inject ExportService ExportSvc
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IJSRuntime JS
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:1280px;margin:0 auto;padding:20px 24px">
+
+    <!-- Sayfa Basligi + Filtreler -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Raporlar</div>
+                @if (salesOnlyMode)
+                {
+                    <span title="Yönetici Prim Ayarları'ndan açıldı. Yalnız satış/hedef realizasyon oranı gösteriliyor; diğer KPI'lar ve final skor gizli."
+                          style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)">📈 Realizasyon Modu</span>
+                }
+            </div>
+            <div style="font-size:11px;color:#475569">Donem bazli prim analizi</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <!-- Dönem seçici -->
+            <select @bind="selectedYear" @bind:after="LoadData" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select @bind="selectedQuarter" @bind:after="LoadData" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+            </select>
+            <button @onclick="RefreshData" disabled="@(isLoading || isRecalculating)" title="Veritabanından güncel sonuçları tekrar oku"
+                    style="padding:6px 12px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                @(isLoading ? "⏳ Yükleniyor..." : "🔄 Yenile")
+            </button>
+            @if (Session.CanManage)
+            {
+                <button @onclick="Recalculate" disabled="@(isLoading || isRecalculating)" title="Hedef/satış verisi güncellendiyse seçili dönemin skorlarını yeniden üretir (yayını etkilemez)"
+                        style="padding:6px 12px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    @(isRecalculating ? "⏳ Hesaplanıyor..." : "⟳ Yeniden Hesapla")
+                </button>
+            }
+            @if (activeProducts.Any())
+            {
+                <select @bind="selectedProductId" @bind:after="LoadData" style="padding:6px 10px;background:#0a0f1a;border:1px solid rgba(139,92,246,0.3);border-radius:7px;color:#f1f5f9;font-size:12px">
+                    <option value="">Tüm Ürünler</option>
+                    @foreach (var p in activeProducts)
+                    {
+                        <option value="@p.ProductId">@p.Name</option>
+                    }
+                </select>
+            }
+            @if (Session.CanManage)
+            {
+                <label title="Yalnız satış/hedef realizasyon oranını göster; diğer KPI'lar ve final skor gizlenir. Global ayardır — ST ve Bölge Müdürü panolarına da uygulanır."
+                       style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:@(salesOnlyMode ? "rgba(59,130,246,0.18)" : "rgba(59,130,246,0.08)");color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    <input type="checkbox" @bind="salesOnlyMode" @bind:after="OnRealizationToggled" style="cursor:pointer" />
+                    📈 Realizasyon
+                </label>
+            }
+            @if (Session.CanViewAll)
+            {
+                <button @onclick="TogglePublishedOnly"
+                        style="padding:6px 12px;background:@(publishedOnly ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(publishedOnly ? "#10b981" : "#f59e0b");border:1px solid @(publishedOnly ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)");border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    @(publishedOnly ? "✓ Yalnızca Yayınlanan" : "Tüm Hesaplamalar")
+                </button>
+            }
+            @if (summaries.Any())
+            {
+                <button @onclick="DownloadExcel" disabled="@isExporting"
+                        style="padding:6px 12px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    @(isExporting ? "⏳ Hazırlanıyor..." : "⬇ Excel")
+                </button>
+            }
+            @if (Session.CanManage && summaries.Any())
+            {
+                var firstCalc = summaries.FirstOrDefault()?.Calc;
+                var pubStatus = firstCalc?.IsPublished ?? false;
+                var pubPaused = firstCalc?.IsPaused ?? false;
+                var pubAt = firstCalc?.PublishedAt;
+                if (pubStatus && pubPaused)
+                {
+                    <StatusBadge Variant="warning" Icon="⏸" Label="@($"Beklemede · {pubAt?.ToLocalTime():dd.MM.yyyy HH:mm}")" />
+                    <button @onclick="DoResume"
+                            style="padding:5px 11px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ▶ Devam Et
+                    </button>
+                    <button @onclick="DoUnpublish"
+                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ⏹ Durdur
+                    </button>
+                }
+                else if (pubStatus)
+                {
+                    <StatusBadge Variant="success" Icon="🟢" Label="@($"Yayında · {pubAt?.ToLocalTime():dd.MM.yyyy HH:mm}")" />
+                    <button @onclick="DoPause"
+                            style="padding:5px 11px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ⏸ Beklet
+                    </button>
+                    <button @onclick="DoUnpublish"
+                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ⏹ Durdur
+                    </button>
+                }
+                else
+                {
+                    <button @onclick="DoPublish"
+                            style="padding:5px 11px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        📤 Yayınla
+                    </button>
+                }
+            }
+            @if (Session.CanManage && summaries.Any())
+            {
+                @if (isLeaderboardActive && isLeaderboardPaused)
+                {
+                    <StatusBadge Variant="warning" Icon="⏸" Label="@($"Sıralama Beklemede{(activeLeaderboardProduct != null ? $" ({activeLeaderboardProduct})" : "")}")" />
+                    <button @onclick="ResumeOrderLeaderboard"
+                            style="padding:5px 11px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ▶ Devam Et
+                    </button>
+                    <button @onclick="StopOrderLeaderboard"
+                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ⏹ Durdur
+                    </button>
+                }
+                else if (isLeaderboardActive)
+                {
+                    <StatusBadge Variant="success" Icon="📊" Label="@($"Sıralama Yayında{(activeLeaderboardProduct != null ? $" ({activeLeaderboardProduct})" : "")}")" />
+                    <button @onclick="PauseOrderLeaderboard"
+                            style="padding:5px 11px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ⏸ Beklet
+                    </button>
+                    <button @onclick="StopOrderLeaderboard"
+                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        ⏹ Durdur
+                    </button>
+                }
+                else
+                {
+                    var prodName = selectedProductId.HasValue ? activeProducts.FirstOrDefault(p => p.ProductId == selectedProductId)?.Name : null;
+                    <button @onclick="PublishOrderLeaderboard"
+                            style="padding:5px 11px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        📊 @(prodName != null ? $"{prodName} Sıralaması Aktar" : "Tüm Ürün Sıralaması Aktar")
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+        <CalcFreshnessBanner Year="selectedYear" Quarter="@selectedQuarter" Freshness="freshness" OnRecalculate="Recalculate" />
+
+        @if (!string.IsNullOrEmpty(authMsg))
+        {
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#ef4444;font-size:13px;display:flex;justify-content:space-between;align-items:center">
+                <span>⚠ @authMsg</span>
+                <button @onclick="() => { authMsg = null; StateHasChanged(); }" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:14px">✕</button>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(modeMsg))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px;display:flex;justify-content:space-between;align-items:center">
+                <span>✓ @modeMsg</span>
+                <button @onclick="() => { modeMsg = null; StateHasChanged(); }" style="background:transparent;border:none;color:#10b981;cursor:pointer;font-size:14px">✕</button>
+            </div>
+        }
+
+        @if (isLoading)
+        {
+            <div style="text-align:center;padding:60px;color:#64748b;font-size:13px">Veriler yükleniyor...</div>
+        }
+        else if (!summaries.Any())
+        {
+            <div style="text-align:center;padding:60px">
+                <div style="font-size:32px;margin-bottom:12px">📊</div>
+                <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Veri Bulunamadı</div>
+                <div style="font-size:12px;color:#64748b">@selectedYear @selectedQuarter için @(publishedOnly ? "yayınlanmış " : "")hesaplama kaydı yok</div>
+            </div>
+        }
+        else
+        {
+            <!-- ÖZET KARTLAR -->
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">TOPLAM ST</div>
+                    <div style="font-size:26px;font-weight:700;color:#f1f5f9;font-family:monospace">@totalCount</div>
+                </div>
+                <div style="background:#111827;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">GEÇEN</div>
+                    <div style="font-size:26px;font-weight:700;color:#10b981;font-family:monospace">@passedCount</div>
+                    <div style="font-size:10px;color:#10b981;margin-top:2px">%@(passRate.ToString("F0"))</div>
+                </div>
+                <div style="background:#111827;border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">KALAN</div>
+                    <div style="font-size:26px;font-weight:700;color:#ef4444;font-family:monospace">@failedCount</div>
+                    <div style="font-size:10px;color:#ef4444;margin-top:2px">%@((100 - passRate).ToString("F0"))</div>
+                </div>
+                <div style="background:#111827;border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">PRİM DIŞI</div>
+                    <div style="font-size:26px;font-weight:700;color:#f59e0b;font-family:monospace">@ineligibleCount</div>
+                    <div style="font-size:10px;color:#64748b;margin-top:2px">yeni başlayan</div>
+                </div>
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+                    <div style="font-size:10px;color:#64748b;font-weight:600">ORT. SKOR</div>
+                    <ScoreGauge Value="@(avgScore / 100)" Size="74" ShowStatus="false" />
+                </div>
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">EN YÜKSEK</div>
+                    <div style="font-size:26px;font-weight:700;color:#a855f7;font-family:monospace">%@(maxScore.ToString("F1"))</div>
+                </div>
+            </div>
+
+            <!-- BÖLGE TABLOSU (ST'ye gösterilmez — yalnız kendi performansı) -->
+            @if (regionRows.Any() && !Session.IsST)
+            {
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:16px">
+                    <div style="padding:12px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px">
+                        <span style="font-size:13px;font-weight:700;color:#f1f5f9">Bölge Bazlı Özet</span>
+                        <span style="font-size:11px;color:#64748b">@selectedYear @selectedQuarter</span>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead>
+                            <tr style="background:#0d1424">
+                                @foreach (var h in new[] { "BÖLGE", "ST SAYISI", "GEÇEN", "KALAN", "PRİM DIŞI", "GEÇİŞ %", "ORT. SKOR", "EN İYİ" })
+                                {
+                                    <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in regionRows.OrderByDescending(x => x.PassRate))
+                            {
+                                <tr style="border-bottom:1px solid #1e293b11">
+                                    <td style="padding:9px 12px;color:#f1f5f9;font-weight:600">@r.RegionName</td>
+                                    <td style="padding:9px 12px;color:#94a3b8;font-family:monospace">@r.Total</td>
+                                    <td style="padding:9px 12px;color:#10b981;font-family:monospace;font-weight:600">@r.Passed</td>
+                                    <td style="padding:9px 12px;color:#ef4444;font-family:monospace">@r.Failed</td>
+                                    <td style="padding:9px 12px;color:#f59e0b;font-family:monospace">@r.Ineligible</td>
+                                    <td style="padding:9px 12px">
+                                        <div style="display:flex;align-items:center;gap:6px">
+                                            <div style="width:60px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+                                                <div style="height:100%;width:@(r.PassRate.ToString("F0"))%;background:@(r.PassRate >= 70 ? "#10b981" : r.PassRate >= 50 ? "#f59e0b" : "#ef4444");border-radius:2px"></div>
+                                            </div>
+                                            <span style="font-weight:700;color:@(r.PassRate >= 70 ? "#10b981" : r.PassRate >= 50 ? "#f59e0b" : "#ef4444")">%@(r.PassRate.ToString("F0"))</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding:9px 12px;color:#3b82f6;font-family:monospace;font-weight:600">%@(r.AvgScore.ToString("F1"))</td>
+                                    <td style="padding:9px 12px;color:#64748b;font-size:11px">@r.TopPerformer</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <!-- ST SIRALAMA TABLOSU -->
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:16px">
+                <div style="padding:12px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-size:13px;font-weight:700;color:#f1f5f9">ST Sıralaması</span>
+                        <span style="font-size:11px;color:#64748b">@summaries.Count kişi</span>
+                    </div>
+                    @if (Session.CanManage)
+                    {
+                        <select @bind="filterRegionId" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:11px">
+                            <option value="0">Tüm Bölgeler</option>
+                            @foreach (var r in regionRows)
+                            {
+                                <option value="@r.RegionId">@r.RegionName</option>
+                            }
+                        </select>
+                    }
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                        <tr style="background:#0d1424">
+                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b;width:32px">#</th>
+                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">İSİM</th>
+                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BÖLGE</th>
+                            <th style="padding:9px 12px;text-align:center;color:#a78bfa;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">TOPLAM HEDEF</th>
+                            <th style="padding:9px 12px;text-align:center;color:#a78bfa;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">TOPLAM GERÇ.</th>
+                            <th style="padding:9px 12px;text-align:center;color:#a78bfa;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">GENEL %</th>
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@(salesOnlyMode ? "REALİZASYON %" : "SATIŞ %")</th>
+                            @if (!salesOnlyMode)
+                            {
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">RUTA %</th>
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">DAĞITIM %</th>
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">STRİKE %</th>
+                            @if (orderShared)
+                            {
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SİP. KUTU</th>
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SİP. TL</th>
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SİP. KURUM</th>
+                            }
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">FİNAL %</th>
+                            }
+                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">DURUM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int rank = 0; }
+                        @foreach (var s in sortedSummaries)
+                        {
+                            rank++;
+                            var dipHedef = s.Details.Sum(d => d.TargetQty);
+                            var dipGerc = s.Details.Sum(d => d.ActualQty);
+                            var dipOran = dipHedef > 0 ? dipGerc / dipHedef * 100 : 0m;
+                            var dipColor = dipOran >= 100 ? "#10b981" : dipOran >= 85 ? "#f59e0b" : "#ef4444";
+                            var score = (salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore)) * 100;
+                            var passed = s.Calc.IsEligible && (salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate);
+                            var statusColor = !s.Calc.IsEligible ? "#f59e0b" : passed ? "#10b981" : "#ef4444";
+                            var statusLabel = !s.Calc.IsEligible ? "Prim Dışı" : passed ? "GEÇTİ" : "KALDI";
+                            var medalColor = rank switch { 1 => "#f59e0b", 2 => "#94a3b8", 3 => "#cd7c3b", _ => "#475569" };
+                            <tr style="border-bottom:1px solid #1e293b0a">
+                                <td style="padding:8px 12px;color:@medalColor;font-weight:700;font-size:@(rank <= 3 ? "15px" : "11px");text-align:center">
+                                    @(rank switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => rank.ToString() })
+                                </td>
+                                <td style="padding:8px 12px;color:#f1f5f9;font-weight:500">@s.Calc.User?.FullName</td>
+                                <td style="padding:8px 12px;color:#64748b;font-size:11px">@(s.Calc.User?.Region?.Name ?? "—")</td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:#94a3b8">@(dipHedef > 0 ? dipHedef.ToString("N0") : "—")</td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:#cbd5e1">@(dipGerc != 0 ? dipGerc.ToString("N0") : "—")</td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;font-weight:700;color:@dipColor">@(dipHedef > 0 ? $"%{dipOran:F1}" : "—")</td>
+                                @{
+                                    decimal displaySalesRate;
+                                    if (selectedProductId.HasValue)
+                                    {
+                                        var pd = s.Details.FirstOrDefault(d => d.ProductId == selectedProductId.Value);
+                                        displaySalesRate = pd != null ? pd.Rate * 100 : 0;
+                                    }
+                                    else
+                                    {
+                                        displaySalesRate = s.Calc.TotalScore * 100;
+                                    }
+                                }
+                                <td style="padding:8px 12px;text-align:center;color:@(displaySalesRate > 0 ? "#94a3b8" : "#475569");font-family:monospace">@(displaySalesRate > 0 ? $"%{displaySalesRate:F1}" : "—")</td>
+                                @if (!salesOnlyMode)
+                                {
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.RutaScore.HasValue ? "#f1f5f9" : "#475569")">
+                                    @(s.Calc.RutaScore.HasValue ? $"%{(s.Calc.RutaScore.Value * 100).ToString("F1")}" : "—")
+                                </td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.DistScore.HasValue ? "#f1f5f9" : "#475569")">
+                                    @(s.Calc.DistScore.HasValue ? $"%{(s.Calc.DistScore.Value * 100).ToString("F1")}" : "—")
+                                </td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.OrderScore.HasValue ? "#f1f5f9" : "#475569")">
+                                    @(s.Calc.OrderScore.HasValue ? $"%{(s.Calc.OrderScore.Value * 100).ToString("F1")}" : "—")
+                                </td>
+                                @if (orderShared)
+                                {
+                                var ord = s.Calc.User != null && orderData.TryGetValue(s.Calc.User.UserId, out var od) ? od : default;
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.BoxQty > 0 ? "#06b6d4" : "#475569")">
+                                    @(ord.BoxQty > 0 ? ord.BoxQty.ToString("N0") : "—")
+                                </td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.AmountTL > 0 ? "#10b981" : "#475569")">
+                                    @(ord.AmountTL > 0 ? ord.AmountTL.ToString("N0") : "—")
+                                </td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.InstCount > 0 ? "#a78bfa" : "#475569")">
+                                    @(ord.InstCount > 0 ? ord.InstCount.ToString("N0") : "—")
+                                </td>
+                                }
+                                <td style="padding:8px 12px;text-align:center;font-weight:700;font-family:monospace;font-size:14px;color:@statusColor">
+                                    %@score.ToString("F1")
+                                </td>
+                                }
+                                <td style="padding:8px 12px;text-align:center">
+                                    <span style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:@(statusColor)22;color:@statusColor;border:1px solid @(statusColor)44">@statusLabel</span>
+                                </td>
+                            </tr>
+                        }
+                        @{
+                            var dipTotHedef = sortedSummaries.Sum(s => s.Details.Sum(d => d.TargetQty));
+                            var dipTotGerc = sortedSummaries.Sum(s => s.Details.Sum(d => d.ActualQty));
+                            var dipTotOran = dipTotHedef > 0 ? dipTotGerc / dipTotHedef * 100 : 0m;
+                            var dipTotColor = dipTotOran >= 100 ? "#10b981" : dipTotOran >= 85 ? "#f59e0b" : "#ef4444";
+                            var restCols = 1 + (salesOnlyMode ? 0 : (3 + (orderShared ? 3 : 0) + 1)) + 1;
+                        }
+                        <tr style="background:#0d1424;border-top:2px solid #334155">
+                            <td colspan="3" style="padding:10px 12px;color:#f1f5f9;font-weight:800;font-size:12px">DİP TOPLAM (by ST)</td>
+                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:#a78bfa">@dipTotHedef.ToString("N0")</td>
+                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:#cbd5e1">@dipTotGerc.ToString("N0")</td>
+                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:@dipTotColor">%@dipTotOran.ToString("F1")</td>
+                            <td colspan="@restCols"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ÜRÜN ANALİZİ -->
+            @if (selectedProductId.HasValue)
+            {
+                var selProduct = activeProducts.FirstOrDefault(p => p.ProductId == selectedProductId.Value);
+                var stProductDetails = summaries
+                    .Select(s => new { s.Calc, Detail = s.Details.FirstOrDefault(d => d.ProductId == selectedProductId.Value) })
+                    .Where(x => x.Detail != null)
+                    .OrderByDescending(x => x.Detail!.Rate)
+                    .ToList();
+                <div style="background:#111827;border:1px solid rgba(139,92,246,0.3);border-radius:12px;overflow:hidden">
+                    <div style="padding:12px 16px;border-bottom:1px solid #1e293b">
+                        <span style="font-size:13px;font-weight:700;color:#a78bfa">@(selProduct?.Name ?? "Ürün") — ST Bazlı Detay</span>
+                        <span style="font-size:11px;color:#64748b;margin-left:8px">@stProductDetails.Count ST</span>
+                    </div>
+                    @if (stProductDetails.Any())
+                    {
+                        <table style="width:100%;border-collapse:collapse;font-size:12px">
+                            <thead>
+                                <tr style="background:#0d1424">
+                                    @foreach (var h in (orderShared
+                                        ? new[] { "#", "İSİM", "BÖLGE", "HEDEF", "GERÇEKLEŞEN", "ORAN", "SİP. KUTU", "SİP. TL" }
+                                        : new[] { "#", "İSİM", "BÖLGE", "HEDEF", "GERÇEKLEŞEN", "ORAN" }))
+                                    {
+                                        <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ int pRank = 0; }
+                                @foreach (var x in stProductDetails)
+                                {
+                                    pRank++;
+                                    var d = x.Detail!;
+                                    var rateVal = d.Rate * 100;
+                                    var rateColor = d.Rate >= 1.0m ? "#10b981" : d.Rate >= 0.85m ? "#f59e0b" : "#ef4444";
+                                    var uid = x.Calc.User?.UserId ?? 0;
+                                    var ordP = orderShared && orderData.TryGetValue(uid, out var opd) ? opd : default;
+                                    <tr style="border-bottom:1px solid #1e293b0a">
+                                        <td style="padding:8px 12px;color:#475569;font-weight:700;font-size:11px;text-align:center">@pRank</td>
+                                        <td style="padding:8px 12px;color:#f1f5f9;font-weight:500">@x.Calc.User?.FullName</td>
+                                        <td style="padding:8px 12px;color:#64748b;font-size:11px">@(x.Calc.User?.Region?.Name ?? "—")</td>
+                                        <td style="padding:8px 12px;color:#64748b;font-family:monospace">@(d.TargetQty > 0 ? d.TargetQty.ToString("F0") : "—")</td>
+                                        <td style="padding:8px 12px;color:#94a3b8;font-family:monospace">@(d.ActualQty > 0 ? d.ActualQty.ToString("F0") : "—")</td>
+                                        <td style="padding:8px 12px">
+                                            <div style="display:flex;align-items:center;gap:6px">
+                                                <div style="width:50px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+                                                    <div style="height:100%;width:@(Math.Min(rateVal, 100).ToString("F0"))%;background:@rateColor;border-radius:2px"></div>
+                                                </div>
+                                                <span style="font-weight:700;color:@rateColor;font-family:monospace">%@(rateVal.ToString("F1")) @(d.IsCapped ? "↑" : "")</span>
+                                            </div>
+                                        </td>
+                                        @if (orderShared)
+                                        {
+                                        <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ordP.BoxQty > 0 ? "#06b6d4" : "#475569")">
+                                            @(ordP.BoxQty > 0 ? ordP.BoxQty.ToString("N0") : "—")
+                                        </td>
+                                        <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ordP.AmountTL > 0 ? "#10b981" : "#475569")">
+                                            @(ordP.AmountTL > 0 ? ordP.AmountTL.ToString("N0") : "—")
+                                        </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <div style="padding:24px;text-align:center;color:#64748b;font-size:13px">Bu ürün için hesaplama detayı bulunamadı</div>
+                    }
+                </div>
+            }
+            else if (productRows.Any())
+            {
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+                    <div style="padding:12px 16px;border-bottom:1px solid #1e293b">
+                        <span style="font-size:13px;font-weight:700;color:#f1f5f9">Ürün Bazlı Performans</span>
+                        <span style="font-size:11px;color:#64748b;margin-left:8px">ortalama satış oranı</span>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead>
+                            <tr style="background:#0d1424">
+                                @foreach (var h in new[] { "ÜRÜN", "GRUP", "ORT. HEDEF", "ORT. GERÇEKLEŞEN", "ORT. ORAN", "HEDEF AŞAN ST" })
+                                {
+                                    <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in productRows.OrderByDescending(x => x.AvgRate))
+                            {
+                                var rateColor = p.AvgRate >= 1.0m ? "#10b981" : p.AvgRate >= 0.85m ? "#f59e0b" : "#ef4444";
+                                <tr style="border-bottom:1px solid #1e293b0a">
+                                    <td style="padding:9px 12px;color:#f1f5f9;font-weight:500">@p.ProductName</td>
+                                    <td style="padding:9px 12px">
+                                        <span style="padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;background:@(p.ProductGroup == "OTC" ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(p.ProductGroup == "OTC" ? "#10b981" : "#f59e0b")">@p.ProductGroup</span>
+                                    </td>
+                                    <td style="padding:9px 12px;color:#64748b;font-family:monospace">@p.AvgTarget.ToString("N0")</td>
+                                    <td style="padding:9px 12px;color:#94a3b8;font-family:monospace">@p.AvgActual.ToString("N0")</td>
+                                    <td style="padding:9px 12px">
+                                        <div style="display:flex;align-items:center;gap:6px">
+                                            <div style="width:70px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+                                                <div style="height:100%;width:@(Math.Min(p.AvgRate * 100, 100).ToString("F0"))%;background:@rateColor;border-radius:2px"></div>
+                                            </div>
+                                            <span style="font-weight:700;color:@rateColor;font-family:monospace">%@((p.AvgRate * 100).ToString("F1"))</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding:9px 12px;color:#64748b;font-family:monospace">@p.AboveTarget / @p.StCount ST</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <!-- ALT BÖLÜM: Brick & Eczane Performansı -->
+            int? bpUserId = Session.IsST ? Session.CurrentUser?.UserId : null;
+            int? bpRegionId = Session.IsBM ? Session.CurrentUser?.RegionId
+                              : (filterRegionId > 0 ? filterRegionId : (int?)null);
+            var bpBrickTitle = Session.IsST ? "Brick Performansım"
+                             : Session.IsBM ? "Bölge Brick Performansı" : "Brick Performansı";
+            var bpPharmTitle = Session.IsST ? "Bricklerimdeki En İyi Eczaneler"
+                             : Session.IsBM ? "Bölgedeki En İyi Eczaneler" : "En İyi Eczaneler";
+            <div style="margin:18px 0 10px;display:flex;align-items:center;gap:8px">
+                <span style="font-size:14px;font-weight:700;color:#f1f5f9">🗺 Brick & Eczane Performansı</span>
+                <span style="font-size:11px;color:#475569">@selectedYear @selectedQuarter</span>
+            </div>
+            <BrickPharmacyPanel Year="selectedYear" Quarter="selectedQuarter"
+                                RegionId="bpRegionId" UserId="bpUserId"
+                                BrickTitle="@bpBrickTitle" PharmacyTitle="@bpPharmTitle" />
+        }
+    </div>
+</div>
+
+@code {
+    private int selectedYear = DateTime.Now.Year;
+    private string selectedQuarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+    private bool publishedOnly = false;
+    private bool isLoading = false;
+    private bool isExporting = false;
+    private bool isRecalculating = false;
+    private bool _sessionChecked = false;
+
+    private List<CalcSummary> summaries = new();
+    private CalcFreshness? freshness;
+    private Dictionary<int, (decimal BoxQty, decimal AmountTL, int InstCount)> orderData = new();
+    private int filterRegionId = 0;
+    private bool isLeaderboardActive = false;
+    private bool isLeaderboardPaused = false;
+    private string? activeLeaderboardProduct;
+    private int? selectedProductId = null;
+    private List<Product> activeProducts = new();
+    private bool salesOnlyMode = false; // "yalnız realizasyon" görünümü — global ayardan başlar, raporlarda yerel checkbox ile değişir
+    private bool _modeInitialized = false;
+    private bool orderShared = false;   // sipariş kolonları görünsün mü (üst yönetim ya da aktif paylaşım)
+
+    // Computed stats
+    private int totalCount, passedCount, failedCount, ineligibleCount;
+    private decimal passRate, avgScore, maxScore;
+    private List<RegionRow> regionRows = new();
+    private List<ProductRow> productRows = new();
+
+    private List<CalcSummary> filteredSummaries =>
+        filterRegionId == 0
+            ? summaries
+            : summaries.Where(s => s.Calc.User?.RegionId == filterRegionId).ToList();
+
+    private IEnumerable<CalcSummary> sortedSummaries =>
+        selectedProductId.HasValue
+            ? filteredSummaries.OrderByDescending(s =>
+              {
+                  var uid = s.Calc.User?.UserId ?? 0;
+                  return orderData.TryGetValue(uid, out var od) ? od.BoxQty : 0m;
+              })
+            : filteredSummaries.OrderByDescending(s => salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            await LoadData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task TogglePublishedOnly()
+    {
+        publishedOnly = !publishedOnly;
+        await LoadData();
+    }
+
+    // Realizasyon checkbox'ı: yerel görünümü değiştirir VE global ayarı (SystemSettings)
+    // kaydeder ki ST/Bölge Müdürü panoları da yalnız realizasyonu göstersin.
+    private async Task OnRealizationToggled()
+    {
+        authMsg = modeMsg = null;
+        try
+        {
+            await CalcSvc.SetSalesOnlyModeAsync(salesOnlyMode, Session.RequireUserId());
+            modeMsg = salesOnlyMode
+                ? "Realizasyon modu açıldı — ST ve Bölge Müdürü panoları da yalnız realizasyonu gösterecek."
+                : "Realizasyon modu kapatıldı — tüm KPI'lar geri geldi.";
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; }
+        catch (Exception)
+        {
+            // SystemSettings tablosu yoksa global kayıt başarısız; yerel görünüm yine değişir.
+            authMsg = "Global mod kaydedilemedi — db/system-settings.sql çalıştırılmalı. Değişiklik yalnız bu sayfada geçerli.";
+        }
+        Compute();
+    }
+
+    // DB'den güncel hesaplama/sipariş verisini tekrar okur (içe aktarma/hesaplama sonrası tazeleme).
+    private async Task RefreshData()
+    {
+        if (isLoading || isRecalculating) return;
+        await LoadData();
+    }
+
+    // Admin: seçili dönemi yeniden hesaplar, ardından sonuçları tazeler. Yayını etkilemez (yeni taslak üretir).
+    private async Task Recalculate()
+    {
+        if (isLoading || isRecalculating) return;
+        isRecalculating = true;
+        authMsg = null;
+        StateHasChanged();
+        try
+        {
+            await CalcSvc.CalculateQuarterAsync(selectedYear, selectedQuarter, Session.RequireUserId());
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.Recalculate] {ex}");
+            authMsg = "Yeniden hesaplama başarısız oldu.";
+        }
+        finally
+        {
+            isRecalculating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            // Global ayar yalnız başlangıç varsayılanını verir; sonra yerel checkbox seçimi korunur.
+            if (!_modeInitialized) { salesOnlyMode = await CalcSvc.GetSalesOnlyModeAsync(); _modeInitialized = true; }
+            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            // ST yalnız kendi satırını görür (başka ST'lerin verisi sızdırılmaz).
+            int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
+            bool po = !Session.CanViewAll || publishedOnly;
+            var task1 = CalcSvc.GetResultsAsync(selectedYear, selectedQuarter, regionFilter, po, specificUserId: userFilter);
+            var task2 = CalcSvc.GetOrderSummariesAsync(selectedYear, selectedQuarter, selectedProductId);
+            await Task.WhenAll(task1, task2);
+            summaries = task1.Result;
+            orderData = task2.Result;
+            var activeLb = await CalcSvc.GetActiveOrderLeaderboardAsync(includePaused: true);
+            isLeaderboardActive = activeLb != null &&
+                activeLb.Year == selectedYear &&
+                activeLb.Quarter == selectedQuarter;
+            isLeaderboardPaused = activeLb?.IsPaused ?? false;
+            // Sipariş kolonları yalnız üst yönetimde veya admin aktif sıralama paylaştığında.
+            orderShared = Session.CanViewAll || (activeLb != null && activeLb.IsActive && !activeLb.IsPaused);
+            activeLeaderboardProduct = activeLb?.Product?.Name;
+            using var dbProd = DbFactory.CreateDbContext();
+            activeProducts = await dbProd.Products
+                .Where(p => p.IsActive && p.IsPrimEligible)
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
+                .ToListAsync();
+            // Yönetim rolüne: seçili çeyrek brick atamasına göre bayat mı / yayınlanmamış mı bandı.
+            freshness = Session.CanManage ? await CalcSvc.GetCalcFreshnessAsync(selectedYear, selectedQuarter) : null;
+            Compute();
+        }
+        finally { isLoading = false; }
+    }
+
+    private string? authMsg;
+    private string? modeMsg;
+
+    private async Task PublishOrderLeaderboard()
+    {
+        try
+        {
+            await CalcSvc.PublishOrderLeaderboardAsync(selectedProductId, selectedYear, selectedQuarter, Session.RequireUserId());
+            isLeaderboardActive = true;
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.PublishOrderLeaderboard] {ex}");
+            authMsg = "İşlem başarısız oldu.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task StopOrderLeaderboard()
+    {
+        try
+        {
+            await CalcSvc.StopOrderLeaderboardAsync(Session.RequireUserId());
+            isLeaderboardActive = false;
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.StopOrderLeaderboard] {ex}");
+            authMsg = "İşlem başarısız oldu.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task DoPublish()
+    {
+        try
+        {
+            var uid = Session.RequireUserId();
+            await CalcSvc.PublishAsync(selectedYear, selectedQuarter, uid);
+            await LoadData();
+            var title = $"{selectedQuarter} {selectedYear} Prim Sonuçları Yayınlandı";
+            await NotifSvc.SendToRoleAsync(RoleId.ST, title, "Prim skorunuzu görüntülemek için ana sayfanızı ziyaret edin.", "Success", uid);
+            await NotifSvc.SendToRoleAsync(RoleId.BM, title, "Bölgenizdeki ST prim sonuçları yayınlandı.", "Success", uid);
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; StateHasChanged(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.DoPublish] {ex}");
+            authMsg = "Yayınlama başarısız oldu.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task DoUnpublish()
+    {
+        try
+        {
+            await CalcSvc.UnpublishAsync(selectedYear, selectedQuarter, Session.RequireUserId());
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; StateHasChanged(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.DoUnpublish] {ex}");
+            authMsg = "Yayını durdurma başarısız oldu.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task DoPause()
+    {
+        try
+        {
+            await CalcSvc.PauseAsync(selectedYear, selectedQuarter, Session.RequireUserId());
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; StateHasChanged(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.DoPause] {ex}");
+            authMsg = "Bekletme başarısız oldu.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task DoResume()
+    {
+        try
+        {
+            await CalcSvc.ResumeAsync(selectedYear, selectedQuarter, Session.RequireUserId());
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; StateHasChanged(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.DoResume] {ex}");
+            authMsg = "Devam ettirme başarısız oldu.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task PauseOrderLeaderboard()
+    {
+        try
+        {
+            await CalcSvc.PauseOrderLeaderboardAsync(Session.RequireUserId());
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; StateHasChanged(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.PauseOrderLeaderboard] {ex}");
+            authMsg = "Bekletme başarısız oldu.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResumeOrderLeaderboard()
+    {
+        try
+        {
+            await CalcSvc.ResumeOrderLeaderboardAsync(Session.RequireUserId());
+            await LoadData();
+        }
+        catch (UnauthorizedAccessException) { authMsg = "Bu işlem için yetkiniz yok."; StateHasChanged(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Reports.ResumeOrderLeaderboard] {ex}");
+            authMsg = "Devam ettirme başarısız oldu.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadExcel()
+    {
+        isExporting = true;
+        StateHasChanged();
+        try
+        {
+            var bytes = ExportSvc.ExportReportAsync(selectedYear, selectedQuarter, summaries);
+            var fileName = $"Rapor_{selectedYear}_{selectedQuarter}_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadBytes", fileName, bytes);
+        }
+        finally { isExporting = false; StateHasChanged(); }
+    }
+
+    private void Compute()
+    {
+        // Yalnız satış modunda skor = satış başarı oranı (TotalScore), gate %85 ona uygulanır.
+        Func<CalcSummary, decimal> scoreOf = s => salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore);
+        Func<CalcSummary, bool> passedOf = s => salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate;
+
+        var eligible = summaries.Where(s => s.Calc.IsEligible).ToList();
+        totalCount = summaries.Count;
+        ineligibleCount = summaries.Count(s => !s.Calc.IsEligible);
+        passedCount = eligible.Count(s => passedOf(s));
+        failedCount = eligible.Count(s => !passedOf(s));
+        passRate = eligible.Any() ? (decimal)passedCount / eligible.Count * 100 : 0;
+        avgScore = eligible.Any() ? eligible.Average(s => scoreOf(s) * 100) : 0;
+        maxScore = summaries.Any() ? summaries.Max(s => scoreOf(s) * 100) : 0;
+
+        // Bölge satırları
+        regionRows = summaries
+            .GroupBy(s => new { Id = s.Calc.User?.RegionId ?? 0, Name = s.Calc.User?.Region?.Name ?? "Belirsiz" })
+            .Select(g =>
+            {
+                var eli = g.Where(s => s.Calc.IsEligible).ToList();
+                var passed = eli.Count(s => passedOf(s));
+                var top = g.OrderByDescending(s => scoreOf(s)).FirstOrDefault();
+                return new RegionRow
+                {
+                    RegionId = g.Key.Id,
+                    RegionName = g.Key.Name,
+                    Total = g.Count(),
+                    Passed = passed,
+                    Failed = eli.Count(s => !passedOf(s)),
+                    Ineligible = g.Count(s => !s.Calc.IsEligible),
+                    PassRate = eli.Any() ? (decimal)passed / eli.Count * 100 : 0,
+                    AvgScore = eli.Any() ? eli.Average(s => scoreOf(s) * 100) : 0,
+                    TopPerformer = top?.Calc.User?.FullName?.Split(' ').FirstOrDefault() ?? ""
+                };
+            })
+            .OrderBy(r => r.RegionName)
+            .ToList();
+
+        // Ürün analizi
+        var allDetails = summaries.SelectMany(s => s.Details).ToList();
+        productRows = allDetails
+            .GroupBy(d => new { d.ProductId, Name = d.Product?.Name ?? "", Group = d.Product?.ProductGroup ?? "" })
+            .Select(g => new ProductRow
+            {
+                ProductName = g.Key.Name,
+                ProductGroup = g.Key.Group,
+                AvgTarget = g.Any() ? g.Average(d => (double)d.TargetQty) : 0,
+                AvgActual = g.Any() ? g.Average(d => (double)d.ActualQty) : 0,
+                AvgRate = g.Any() ? g.Average(d => d.Rate) : 0,
+                AboveTarget = g.Count(d => d.Rate >= 1.0m),
+                StCount = g.Count()
+            })
+            .ToList();
+    }
+
+    private class RegionRow
+    {
+        public int RegionId { get; set; }
+        public string RegionName { get; set; } = "";
+        public int Total { get; set; }
+        public int Passed { get; set; }
+        public int Failed { get; set; }
+        public int Ineligible { get; set; }
+        public decimal PassRate { get; set; }
+        public decimal AvgScore { get; set; }
+        public string TopPerformer { get; set; } = "";
+    }
+
+    private class ProductRow
+    {
+        public string ProductName { get; set; } = "";
+        public string ProductGroup { get; set; } = "";
+        public double AvgTarget { get; set; }
+        public double AvgActual { get; set; }
+        public decimal AvgRate { get; set; }
+        public int AboveTarget { get; set; }
+        public int StCount { get; set; }
+    }
+}

@@ -1,0 +1,805 @@
+@page "/organization"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@inject AuthService AuthSvc
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+@if (!Session.CanViewAll)
+{
+    <NotAuthorizedView />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:1200px;margin:0 auto;padding:20px">
+
+        <!-- Sayfa Basligi + Kontroller -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Organizasyon Yonetimi</div>
+                <div style="font-size:11px;color:#475569">@regions.Count Bolge · @bmCount BM · @stCount ST</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <input @bind="searchTerm" @bind:event="oninput" placeholder="&#128269; Ara..."
+                       style="padding:7px 12px;background:#0a0f1a;border:1px solid #1e293b;border-radius:8px;color:#f1f5f9;font-size:12px;width:180px;outline:none" />
+                <button @onclick="ToggleInactive"
+                        style="padding:7px 14px;background:@(showInactive ? "rgba(239,68,68,0.12)" : "rgba(148,163,184,0.08)");color:@(showInactive ? "#ef4444" : "#94a3b8");border:1px solid @(showInactive ? "rgba(239,68,68,0.3)" : "#1e293b");border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                    @(showInactive ? "Pasif Gizle" : "Pasif Kullanicilar")
+                </button>
+                @if (Session.CanManage)
+                {
+                    <button @onclick="ShowAddUser" style="padding:7px 15px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">+ Kullanici Ekle</button>
+                    <button @onclick="() => showBulkResetConfirm = true" style="padding:7px 15px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Tum Sifreleri Sifirla</button>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">@message</div>
+        }
+
+        <!-- AKTİF OTURUMLAR PANELİ (sadece admin) -->
+        @if (Session.CanManage && activeSessions.Any())
+        {
+            <div style="background:#111827;border:1px solid rgba(16,185,129,0.3);border-radius:12px;margin-bottom:16px;overflow:hidden">
+                <div @onclick="() => showOnlinePanel = !showOnlinePanel"
+                     style="padding:12px 18px;background:#0d1f17;border-bottom:1px solid rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:14px">🟢</span>
+                        <span style="font-size:13px;font-weight:700;color:#34d399">Aktif Oturumlar</span>
+                        <span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)">@activeSessions.Count kişi online</span>
+                    </div>
+                    <span style="color:#64748b;font-size:11px">@(showOnlinePanel ? "▲ Gizle" : "▼ Göster")</span>
+                </div>
+                @if (showOnlinePanel)
+                {
+                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead>
+                            <tr>
+                                @foreach (var h in new[] { "KULLANICI", "BÖLGE", "GİRİŞ SAATİ", "BU OTURUM", "TOPLAM ONLINE" })
+                                {
+                                    <th style="padding:8px 14px;text-align:left;color:#64748b;font-size:10px;font-weight:700;border-bottom:1px solid #1e293b">@h</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in activeSessions)
+                            {
+                                <tr style="border-bottom:1px solid #1e293b22">
+                                    <td style="padding:8px 14px;color:#f1f5f9;font-weight:600">🟢 @s.FullName</td>
+                                    <td style="padding:8px 14px;color:#94a3b8">@s.Region</td>
+                                    <td style="padding:8px 14px;color:#94a3b8;font-family:monospace">@s.LoginAt.ToLocalTime().ToString("HH:mm")</td>
+                                    <td style="padding:8px 14px;color:#10b981;font-weight:600">
+                                        @if (s.CurrentMinutes < 60)
+                                        {
+                                            <span>@s.CurrentMinutes dk</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@(s.CurrentMinutes / 60)s @(s.CurrentMinutes % 60)dk</span>
+                                        }
+                                    </td>
+                                    <td style="padding:8px 14px;color:#64748b">
+                                        @if (s.TotalMinutes < 60)
+                                        {
+                                            <span>@s.TotalMinutes dk</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@(s.TotalMinutes / 60)s @(s.TotalMinutes % 60)dk</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+
+        <!-- AKTİF KULLANICILAR — Bölge Bazlı -->
+        @foreach (var region in regions)
+        {
+            var regionUsers = users.Where(u => u.RegionId == region.RegionId).ToList();
+            var regionBMs = regionUsers.Where(u => u.RoleId == RoleId.BM).ToList();
+            var regionSTs = regionUsers.Where(u => u.RoleId == RoleId.ST).ToList();
+            var regionYon = regionUsers.Where(u => u.RoleId == RoleId.Yonetici).ToList();
+
+            // Arama filtresi
+            var visibleSTs = regionSTs.Where(UserMatches).ToList();
+            var visibleBMs = regionBMs.Where(bm => UserMatches(bm) || regionSTs.Any(st => st.ManagerId == bm.UserId && UserMatches(st))).ToList();
+            var visibleYon = regionYon.Where(UserMatches).ToList();
+            if (!string.IsNullOrEmpty(searchTerm) && !visibleSTs.Any() && !visibleBMs.Any() && !visibleYon.Any()) continue;
+
+            <div @key="region.RegionId" style="background:#111827;border:1px solid #1e293b;border-radius:12px;margin-bottom:12px;overflow:hidden">
+                <div style="padding:12px 18px;background:#171f2e;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:15px;font-weight:700;color:#f1f5f9">@region.Name</span>
+                        <span style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)">@regionSTs.Count ST</span>
+                    </div>
+                </div>
+
+                @foreach (var yon in visibleYon)
+                {
+                    <div style="padding:6px 18px;display:flex;align-items:center;gap:8px">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#a855f7;display:inline-block"></span>
+                        <span style="font-size:11px;color:#a855f7;font-weight:600">Yönetici: @yon.FullName</span>
+                        <span style="font-size:10px;color:#64748b">@yon.Email</span>
+                    </div>
+                }
+
+                @foreach (var bm in visibleBMs)
+                {
+                    var bmSTs = regionSTs.Where(s => s.ManagerId == bm.UserId && UserMatches(s)).ToList();
+                    <div style="padding:8px 18px">
+                        <div style="font-size:11px;color:#f59e0b;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                            <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
+                            BM: @bm.FullName
+                            <span style="font-size:10px;color:#60a5fa;font-weight:600;font-family:monospace">@bm.Username</span>
+                            @if (bm.MustChangePassword)
+                            {
+                                <span style="padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.25)">Şifre Değiştirilmeli</span>
+                            }
+                            @if (Session.CanManage)
+                            {
+                                <button @onclick="() => StartEditUser(bm)" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:11px;padding:0;margin-left:4px">✏️</button>
+                                <button @onclick="() => QuickReset(bm)" style="background:none;border:none;cursor:pointer;color:#f59e0b;font-size:11px;padding:0;margin-left:2px" title="Şifreyi sıfırla">🔑</button>
+                                <button @onclick="() => Impersonate(bm)" style="background:none;border:none;cursor:pointer;color:#3b82f6;font-size:11px;padding:0;margin-left:2px" title="Bu kullanıcı olarak giriş yap">👤</button>
+                                @if (confirmDeleteUserId == bm.UserId)
+                                {
+                                    <span style="font-size:10px;color:#ef4444">Emin misiniz?</span>
+                                    <button @onclick="() => ConfirmDeactivate(bm)" style="padding:1px 7px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:4px;font-size:10px;cursor:pointer">Evet</button>
+                                    <button @onclick="CancelDelete" style="padding:1px 7px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:4px;font-size:10px;cursor:pointer">Hayır</button>
+                                }
+                                else
+                                {
+                                    <button @onclick="() => confirmDeleteUserId = bm.UserId" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:11px;padding:0">🗑️</button>
+                                }
+                            }
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-left:14px">
+                            @foreach (var st in bmSTs)
+                            {
+                                var brickCount = userBricks.Count(ub => ub.UserId == st.UserId && ub.IsActive);
+                                var monthsWorked = ((DateTime.Now.Year - st.HireDate.Year) * 12) + DateTime.Now.Month - st.HireDate.Month;
+                                var isNew = monthsWorked < st.MinMonths;
+                                <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 12px;background:#0a0f1a;border-radius:8px;border:1px solid #1e293b;font-size:12px">
+                                    <div>
+                                        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+                                            <span style="font-weight:600;color:#f1f5f9">@st.FullName</span>
+                                            @if (Session.CanManage)
+                                            {
+                                                var status = OnlineStatus(st.UserId);
+                                                @if (!string.IsNullOrEmpty(status))
+                                                {
+                                                    <span style="font-size:10px;cursor:pointer" title="Oturum geçmişi" @onclick="() => ShowSessionHistory(st.UserId)">@status</span>
+                                                }
+                                            }
+                                            @if (isNew)
+                                            {
+                                                <span style="padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(245,158,11,0.15);color:#f59e0b">YENİ</span>
+                                            }
+                                            @if (st.MustChangePassword)
+                                            {
+                                                <span style="padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.25)">Şifre Değiştirilmeli</span>
+                                            }
+                                        </div>
+                                        <div style="font-size:10px;color:#64748b">
+                                            <span style="color:#60a5fa;font-weight:600;font-family:monospace">@st.Username</span> · @brickCount brick · Giriş: @st.HireDate.ToString("dd.MM.yyyy")
+                                            @if (st.BirthDate.HasValue)
+                                            {
+                                                <span> · DG: @st.BirthDate.Value.ToString("dd.MM")</span>
+                                            }
+                                            · Min @st.MinMonths ay
+                                        </div>
+                                    </div>
+                                    @if (Session.CanManage)
+                                    {
+                                        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+                                            <button @onclick="() => StartEditUser(st)" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:12px;padding:2px">✏️</button>
+                                            <button @onclick="() => QuickReset(st)" style="background:none;border:none;cursor:pointer;color:#f59e0b;font-size:12px;padding:2px" title="Şifreyi sıfırla">🔑</button>
+                                            <button @onclick="() => Impersonate(st)" style="background:none;border:none;cursor:pointer;color:#3b82f6;font-size:12px;padding:2px" title="Bu kullanıcı olarak giriş yap">👤</button>
+                                            @if (confirmDeleteUserId == st.UserId)
+                                            {
+                                                <span style="font-size:10px;color:#ef4444;white-space:nowrap">Emin mi?</span>
+                                                <button @onclick="() => ConfirmDeactivate(st)" style="padding:2px 7px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:4px;font-size:10px;cursor:pointer">Evet</button>
+                                                <button @onclick="CancelDelete" style="padding:2px 7px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:4px;font-size:10px;cursor:pointer">Hayır</button>
+                                            }
+                                            else
+                                            {
+                                                <button @onclick="() => confirmDeleteUserId = st.UserId" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:12px;padding:2px">🗑️</button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (!visibleBMs.Any() && !visibleSTs.Any() && !visibleYon.Any() && string.IsNullOrEmpty(searchTerm))
+                {
+                    <div style="padding:12px 18px;color:#64748b;font-size:12px;font-style:italic">Bu bölgede henüz kullanıcı atanmamış</div>
+                }
+            </div>
+        }
+
+        <!-- Bölgesi olmayan kullanıcılar -->
+        @{
+            var noRegion = users.Where(u => u.RegionId == null && u.RoleId > 1 && UserMatches(u)).ToList();
+        }
+        @if (noRegion.Any())
+        {
+            <div style="background:#111827;border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px;margin-bottom:12px">
+                <div style="font-size:13px;font-weight:700;color:#ef4444;margin-bottom:8px">Bölge Atanmamış (@noRegion.Count)</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                    @foreach (var u in noRegion)
+                    {
+                        <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;font-size:12px">
+                            <span style="color:#f1f5f9">@u.FullName</span>
+                            <span style="color:#64748b">(@u.Role?.Name)</span>
+                            @if (Session.CanManage)
+                            {
+                                <button @onclick="() => StartEditUser(u)" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:11px;padding:0">✏️</button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- PASİF KULLANICILAR -->
+        @if (showInactive && inactiveUsers.Any())
+        {
+            <div style="background:#111827;border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:16px">
+                <div style="font-size:13px;font-weight:700;color:#ef4444;margin-bottom:10px">Pasif / Deaktif Kullanıcılar (@inactiveUsers.Count)</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                    @foreach (var u in inactiveUsers.Where(UserMatches))
+                    {
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#0a0f1a;border:1px solid #1e293b;border-radius:8px;font-size:12px;opacity:0.7">
+                            <div>
+                                <span style="font-weight:600;color:#f1f5f9">@u.FullName</span>
+                                <span style="color:#64748b;margin-left:8px">@(u.Email ?? "—") · @u.Role?.Name</span>
+                                @if (u.DeactivatedAt.HasValue)
+                                {
+                                    <span style="color:#64748b;margin-left:8px">· Deaktif: @u.DeactivatedAt.Value.ToLocalTime().ToString("dd.MM.yyyy")</span>
+                                }
+                            </div>
+                            @if (Session.CanManage)
+                            {
+                                <button @onclick="() => ReactivateUser(u)"
+                                        style="padding:4px 12px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+                                    Aktif Et
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        @if (showInactive && !inactiveUsers.Any())
+        {
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px;text-align:center;color:#64748b;font-size:13px">Pasif kullanıcı yok</div>
+        }
+    </div>
+
+    <!-- TOPLU SIFIRLAMA ONAY MODALI -->
+    @if (showBulkResetConfirm)
+    {
+        <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)" @onclick="() => showBulkResetConfirm = false">
+            <div style="background:#111827;border:1px solid rgba(245,158,11,0.4);border-radius:14px;padding:28px;width:420px" @onclick:stopPropagation>
+                <div style="font-size:18px;margin-bottom:10px">⚠️</div>
+                <h3 style="margin:0 0 10px;font-size:16px;color:#f1f5f9">Tüm Şifreleri Sıfırla</h3>
+                <p style="margin:0 0 20px;font-size:13px;color:#94a3b8">
+                    Tüm aktif kullanıcıların şifresi <strong style="color:#f59e0b">isim bazlı varsayılana</strong> sıfırlanacak ve "Şifre Değiştir" zorunluluğu aktif olacak.<br/><br/>
+                    Örnek: Ahmet Yılmaz → <span style="font-family:monospace;color:#10b981">AhYı12</span>
+                </p>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button @onclick="() => showBulkResetConfirm = false" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="DoBulkReset" disabled="@isBulkResetting" style="padding:8px 18px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+                        @(isBulkResetting ? "Sıfırlanıyor..." : "Evet, Sıfırla")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- KULLANICI EKLEME/DÜZENLEME DIALOG -->
+    @if (showDialog)
+    {
+        <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)" @onclick="CloseDialog">
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;width:520px;max-height:90vh;overflow-y:auto" @onclick:stopPropagation>
+                <div style="display:flex;justify-content:space-between;margin-bottom:18px">
+                    <h3 style="margin:0;font-size:16px;color:#f1f5f9">@(isEditing ? "Kullanıcı Düzenle" : "Yeni Kullanıcı Ekle")</h3>
+                    <button @onclick="CloseDialog" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;line-height:1">✕</button>
+                </div>
+
+                <div style="margin-bottom:12px">
+                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ad Soyad</label>
+                    <input @bind="formName" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none" />
+                </div>
+
+                <!-- Otomatik kullanıcı adı ve şifre önizlemesi -->
+                @{
+                    var previewUsername = PrimSystem.Services.AuthService.GenerateUsername(formName);
+                    var previewPassword = PrimSystem.Services.AuthService.GenerateDefaultPassword(formName);
+                }
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Kullanıcı Adı (otomatik)</label>
+                        <div style="padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#60a5fa;font-size:13px;font-weight:600;font-family:monospace">
+                            @(string.IsNullOrWhiteSpace(formName) ? "—" : previewUsername)
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Varsayılan Şifre (otomatik)</label>
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <div style="flex:1;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#10b981;font-size:13px;font-weight:600;font-family:monospace">
+                                @(string.IsNullOrWhiteSpace(formName) ? "—" : showPassword ? previewPassword : "••••••••")
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(formName))
+                            {
+                                <button @onclick="() => showPassword = !showPassword"
+                                    style="padding:6px 10px;background:rgba(100,116,139,0.15);color:#94a3b8;border:1px solid #1e293b;border-radius:7px;font-size:11px;cursor:pointer;white-space:nowrap">
+                                    @(showPassword ? "Gizle" : "Göster")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px">
+                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Email (isteğe bağlı)</label>
+                    <input @bind="formEmail" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none" />
+                </div>
+                @if (isEditing)
+                {
+                    <div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+                        <span style="font-size:11px;color:#94a3b8">Şifreyi varsayılan değere sıfırla: <strong style="color:#f59e0b;font-family:monospace">••••••••</strong></span>
+                        <button @onclick="ResetPassword" style="padding:4px 12px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Sıfırla</button>
+                    </div>
+                }
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Rol</label>
+                        <select @bind="formRoleId" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <option value="2">Yönetici (Kanal Müdürü)</option>
+                            <option value="3">BM (Bölge Müdürü)</option>
+                            <option value="4">ST (Satış Temsilcisi)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Bölge</label>
+                        <select @bind="formRegionId" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <option value="0">— Seçiniz —</option>
+                            @foreach (var r in regions)
+                            {
+                                <option value="@r.RegionId">@r.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Bağlı Yönetici / BM</label>
+                        <select @bind="formManagerId" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <option value="0">— Yok —</option>
+                            @foreach (var m in users.Where(u => u.RoleId <= 3 && u.IsActive))
+                            {
+                                <option value="@m.UserId">@m.FullName (@m.Role?.Name)</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">İşe Giriş Tarihi</label>
+                        <input type="date" @bind="formHireDate" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" />
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Doğum Tarihi (opsiyonel)</label>
+                        <input type="date" @bind="formBirthDate" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" />
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Min. Çalışma (ay) — prim uygunluğu</label>
+                        <input type="number" @bind="formMinMonths" min="0" max="24"
+                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(formError))
+                {
+                    <div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:8px 12px;margin-bottom:12px;color:#ef4444;font-size:12px">@formError</div>
+                }
+
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                    <button @onclick="CloseDialog" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="SaveUser" style="padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">@(isEditing ? "Güncelle" : "Ekle")</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Oturum Geçmişi Popup — yalnızca admin -->
+@if (Session.CanManage && sessionHistoryUserId.HasValue)
+{
+    var histUser = users.FirstOrDefault(u => u.UserId == sessionHistoryUserId.Value);
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:300;display:flex;align-items:center;justify-content:center" @onclick="() => sessionHistoryUserId = null">
+        <div style="background:#0f172a;border:1px solid rgba(99,102,241,0.35);border-radius:14px;padding:24px;width:420px;max-width:95vw" @onclick:stopPropagation>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <div style="font-size:14px;font-weight:700;color:#f1f5f9">🕐 Oturum Geçmişi — @(histUser?.FullName ?? "")</div>
+                <button @onclick="() => sessionHistoryUserId = null" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px">×</button>
+            </div>
+            @if (!sessionHistory.Any())
+            {
+                <div style="text-align:center;color:#475569;font-size:12px;padding:16px">Kayıt bulunamadı</div>
+            }
+            else
+            {
+                <table style="width:100%;border-collapse:collapse;font-size:11px">
+                    <thead>
+                        <tr style="color:#475569;border-bottom:1px solid #1e293b">
+                            <th style="text-align:left;padding:5px 8px">Giriş</th>
+                            <th style="text-align:left;padding:5px 8px">Çıkış</th>
+                            <th style="text-align:right;padding:5px 8px">Süre</th>
+                            <th style="text-align:center;padding:5px 8px">Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in sessionHistory)
+                        {
+                            var dur = s.LogoutAt.HasValue
+                                ? (int)(s.LogoutAt.Value - s.LoginAt).TotalMinutes
+                                : (int)(s.LastSeenAt - s.LoginAt).TotalMinutes;
+                            <tr style="border-bottom:1px solid #0f172a;color:#94a3b8">
+                                <td style="padding:5px 8px">@s.LoginAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
+                                <td style="padding:5px 8px">@(s.LogoutAt.HasValue ? s.LogoutAt.Value.ToLocalTime().ToString("dd.MM HH:mm") : "—")</td>
+                                <td style="padding:5px 8px;text-align:right">@dur dk</td>
+                                <td style="padding:5px 8px;text-align:center">
+                                    @if (s.IsActive)
+                                    {
+                                        <span style="color:#10b981;font-size:10px;font-weight:600">● Aktif</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:#475569;font-size:10px">Kapandı</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<Region> regions = new();
+    private List<User> users = new();
+    private List<User> inactiveUsers = new();
+    private List<UserBrick> userBricks = new();
+    private int bmCount, stCount;
+    private string message = "";
+    private string searchTerm = "";
+    private bool showInactive = false;
+
+    // Dialog
+    private bool showDialog = false;
+    private bool isEditing = false;
+    private bool showPassword = false;
+    private int editUserId = 0;
+    private string formName = "";
+    private string formEmail = "";
+    private int formRoleId = 4;
+    private int formRegionId = 0;
+    private int formManagerId = 0;
+    private DateTime formHireDate = DateTime.Today;
+    private DateTime? formBirthDate;
+    private int formMinMonths = 3;
+    private string formError = "";
+
+    private int? confirmDeleteUserId = null;
+    private bool _sessionChecked = false;
+    private bool showBulkResetConfirm = false;
+    private bool isBulkResetting = false;
+
+    // Online durum (UserId → LastSeenAt)
+    private Dictionary<int, DateTime> lastSeenMap = new();
+    // Session geçmişi popup
+    private int? sessionHistoryUserId = null;
+    private List<UserSession> sessionHistory = new();
+
+    // Aktif oturumlar paneli
+    private List<ActiveSessionInfo> activeSessions = new();
+    private bool showOnlinePanel = true;
+    private record ActiveSessionInfo(string FullName, string Region, DateTime LoginAt, int CurrentMinutes, int TotalMinutes);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            StateHasChanged();
+        }
+    }
+
+    private bool UserMatches(User u) =>
+        string.IsNullOrEmpty(searchTerm) ||
+        u.FullName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+        (u.Email?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private string OnlineStatus(int userId)
+    {
+        if (!lastSeenMap.TryGetValue(userId, out var seen)) return "";
+        var mins = (int)(DateTime.UtcNow - seen).TotalMinutes;
+        if (mins < 10) return "🟢";
+        if (mins < 60) return $"⚪ {mins}dk";
+        return "⚫";
+    }
+
+    private async Task ShowSessionHistory(int userId)
+    {
+        sessionHistoryUserId = userId;
+        sessionHistory = await Session.GetSessionHistoryAsync(userId);
+    }
+
+    private async Task LoadData()
+    {
+        using var db = DbFactory.CreateDbContext();
+        regions = await db.Regions.Where(r => r.IsActive).OrderBy(r => r.Name).ToListAsync();
+        users = await db.Users.Include(u => u.Role).Include(u => u.Region)
+            .Where(u => !u.IsDeleted && u.IsActive).OrderBy(u => u.FullName).ToListAsync();
+        userBricks = await db.UserBricks.Where(ub => ub.IsActive).ToListAsync();
+        bmCount = users.Count(u => u.RoleId == RoleId.BM);
+        stCount = users.Count(u => u.RoleId == RoleId.ST);
+
+        // Online durumu yalnızca admin için yükle
+        if (Session.CanManage)
+        {
+            var cutoff = DateTime.UtcNow.AddHours(-24);
+            var sessions = await db.UserSessions
+                .Where(s => s.LastSeenAt > cutoff)
+                .GroupBy(s => s.UserId)
+                .Select(g => new { UserId = g.Key, LastSeen = g.Max(s => s.LastSeenAt) })
+                .ToListAsync();
+            lastSeenMap = sessions.ToDictionary(s => s.UserId, s => s.LastSeen);
+
+            // Aktif oturum paneli: son 15 dakikada görülen aktif sessionlar
+            var onlineCutoff = DateTime.UtcNow.AddMinutes(-15);
+            var activeSess = await db.UserSessions
+                .Where(s => s.IsActive && s.LastSeenAt > onlineCutoff)
+                .Include(s => s.User).ThenInclude(u => u!.Region)
+                .ToListAsync();
+
+            var onlineUserIds = activeSess.Select(s => s.UserId).Distinct().ToList();
+            var allUserSessions = onlineUserIds.Any()
+                ? await db.UserSessions.Where(s => onlineUserIds.Contains(s.UserId)).ToListAsync()
+                : new List<UserSession>();
+
+            activeSessions = activeSess
+                .Select(s => new ActiveSessionInfo(
+                    s.User?.FullName ?? "—",
+                    s.User?.Region?.Name ?? "—",
+                    s.LoginAt,
+                    (int)(DateTime.UtcNow - s.LoginAt).TotalMinutes,
+                    (int)allUserSessions
+                        .Where(x => x.UserId == s.UserId)
+                        .Sum(x => ((x.LogoutAt ?? x.LastSeenAt) - x.LoginAt).TotalMinutes)
+                ))
+                .OrderByDescending(x => x.CurrentMinutes)
+                .ToList();
+        }
+
+        if (showInactive)
+            inactiveUsers = await db.Users.Include(u => u.Role)
+                .Where(u => u.IsDeleted || !u.IsActive).OrderBy(u => u.FullName).ToListAsync();
+    }
+
+    private async Task ToggleInactive()
+    {
+        showInactive = !showInactive;
+        if (showInactive)
+        {
+            using var db = DbFactory.CreateDbContext();
+            inactiveUsers = await db.Users.Include(u => u.Role)
+                .Where(u => u.IsDeleted || !u.IsActive).OrderBy(u => u.FullName).ToListAsync();
+        }
+    }
+
+    private void ShowAddUser()
+    {
+        isEditing = false; editUserId = 0;
+        formName = ""; formEmail = "";
+        formRoleId = 4; formRegionId = 0; formManagerId = 0;
+        formHireDate = DateTime.Today; formBirthDate = null;
+        formMinMonths = 3; formError = "";
+        showDialog = true;
+    }
+
+    private void StartEditUser(User u)
+    {
+        isEditing = true; editUserId = u.UserId;
+        formName = u.FullName; formEmail = u.Email;
+        formRoleId = u.RoleId; formRegionId = u.RegionId ?? 0; formManagerId = u.ManagerId ?? 0;
+        formHireDate = u.HireDate; formBirthDate = u.BirthDate;
+        formMinMonths = u.MinMonths; formError = "";
+        showDialog = true;
+    }
+
+    private void CloseDialog() { showDialog = false; showPassword = false; }
+
+    private void CancelDelete() { confirmDeleteUserId = null; }
+
+    private async Task SaveUser()
+    {
+        using var db = DbFactory.CreateDbContext();
+        formError = "";
+        if (string.IsNullOrWhiteSpace(formName)) { formError = "Ad soyad giriniz"; return; }
+
+        if (isEditing)
+        {
+            var user = await db.Users.FindAsync(editUserId);
+            if (user == null) return;
+
+            // İsim değiştiyse username da güncelle
+            if (user.FullName != formName.Trim())
+                user.Username = await EnsureUniqueUsername(PrimSystem.Services.AuthService.GenerateUsername(formName), editUserId);
+
+            user.FullName = formName.Trim();
+            user.Email = formEmail;
+            user.RoleId = formRoleId;
+            user.RegionId = formRegionId == 0 ? null : formRegionId;
+            user.ManagerId = formManagerId == 0 ? null : formManagerId;
+            user.HireDate = formHireDate;
+            user.BirthDate = formBirthDate;
+            user.MinMonths = formMinMonths;
+            await db.SaveChangesAsync();
+            message = $"{formName} güncellendi · Kullanıcı adı: {user.Username}";
+        }
+        else
+        {
+            var baseUsername = PrimSystem.Services.AuthService.GenerateUsername(formName);
+            var username = await EnsureUniqueUsername(baseUsername);
+            var defaultPwd = PrimSystem.Services.AuthService.GenerateDefaultPassword(formName);
+
+            var user = new User
+            {
+                FullName = formName.Trim(),
+                Username = username,
+                Email = formEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(defaultPwd),
+                RoleId = formRoleId,
+                RegionId = formRegionId == 0 ? null : formRegionId,
+                ManagerId = formManagerId == 0 ? null : formManagerId,
+                HireDate = formHireDate,
+                BirthDate = formBirthDate,
+                MinMonths = formMinMonths,
+                MustChangePassword = true,
+                IsActive = true
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            message = $"{formName} eklendi · Kullanıcı adı: {username} · Şifre: {defaultPwd}";
+        }
+
+        showDialog = false;
+        showPassword = false;
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    private async Task ResetPassword()
+    {
+        using var db = DbFactory.CreateDbContext();
+        var user = await db.Users.FindAsync(editUserId);
+        if (user == null) return;
+        var defaultPwd = PrimSystem.Services.AuthService.GenerateDefaultPassword(formName);
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(defaultPwd);
+        user.MustChangePassword = true;
+        await db.SaveChangesAsync();
+        message = $"Şifre sıfırlandı: {defaultPwd}";
+        _ = ClearMessage();
+    }
+
+    private async Task<string> EnsureUniqueUsername(string baseUsername, int excludeUserId = 0)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var username = baseUsername;
+        int suffix = 2;
+        while (await db.Users.AnyAsync(u => u.Username == username && u.UserId != excludeUserId))
+        {
+            username = baseUsername + suffix;
+            suffix++;
+        }
+        return username;
+    }
+
+    private async Task ConfirmDeactivate(User u)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var tracked = await db.Users.FindAsync(u.UserId);
+        if (tracked == null) return;
+        tracked.IsActive = false;
+        tracked.IsDeleted = true;
+        tracked.DeactivatedAt = DateTime.UtcNow;
+        tracked.DeactivatedBy = Session.CurrentUser?.UserId;
+        await db.SaveChangesAsync();
+        confirmDeleteUserId = null;
+        message = $"{u.FullName} deaktif edildi";
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    private async Task DoBulkReset()
+    {
+        isBulkResetting = true;
+        try
+        {
+            var count = await AuthSvc.BulkResetPasswordsAsync(Session.RequireUserId());
+            showBulkResetConfirm = false;
+            message = $"✓ {count} kullanıcının şifresi sıfırlandı.";
+            _ = ClearMessage();
+        }
+        finally { isBulkResetting = false; }
+    }
+
+    private async Task QuickReset(User u)
+    {
+        var pwd = await AuthSvc.AdminResetPasswordAsync(u.UserId, Session.RequireUserId());
+        message = $"🔑 {u.FullName} → yeni şifre: {pwd}";
+        _ = ClearMessage();
+    }
+
+    private async Task Impersonate(User u)
+    {
+        await Session.ImpersonateAsync(u, SessionStorage);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task ReactivateUser(User u)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var tracked = await db.Users.FindAsync(u.UserId);
+        if (tracked == null) return;
+        tracked.IsActive = true;
+        tracked.IsDeleted = false;
+        tracked.DeactivatedAt = null;
+        tracked.DeactivatedBy = null;
+        await db.SaveChangesAsync();
+        message = $"{u.FullName} tekrar aktif edildi";
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    private int _msgVersion;
+
+    private async Task ClearMessage()
+    {
+        var v = ++_msgVersion;
+        await Task.Delay(3000);
+        if (v == _msgVersion) { message = ""; await InvokeAsync(StateHasChanged); }
+    }
+}

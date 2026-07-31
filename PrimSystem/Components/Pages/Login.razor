@@ -1,0 +1,148 @@
+@page "/login"
+@using PrimSystem.Services
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject AuthService Auth
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@inject IHttpContextAccessor HttpCtx
+@rendermode InteractiveServer
+
+<div style="min-height:100vh;background:#050b15;display:flex;align-items:stretch;font-family:Segoe UI,sans-serif;position:relative;overflow:hidden">
+
+    <!-- Arka plan dekorasyon -->
+    <div style="position:absolute;top:-160px;left:-160px;width:600px;height:600px;background:radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 65%);pointer-events:none"></div>
+    <div style="position:absolute;bottom:-120px;right:-120px;width:500px;height:500px;background:radial-gradient(circle,rgba(16,185,129,0.12) 0%,transparent 65%);pointer-events:none"></div>
+    <div style="position:absolute;top:40%;left:55%;width:350px;height:350px;background:radial-gradient(circle,rgba(245,158,11,0.07) 0%,transparent 65%);pointer-events:none"></div>
+
+    <!-- Sol panel — marka alanı -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:60px;background:linear-gradient(135deg,rgba(99,102,241,0.06) 0%,transparent 60%)">
+        <div style="max-width:420px">
+            <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:#fff;margin-bottom:28px;box-shadow:0 8px 24px rgba(99,102,241,0.35)">P</div>
+            <h1 style="color:#f1f5f9;font-size:32px;font-weight:800;margin:0 0 10px;letter-spacing:-1px;line-height:1.2">Prim Yönetim<br /><span style="background:linear-gradient(90deg,#6366f1,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Sistemi</span></h1>
+            <p style="color:#64748b;font-size:15px;margin:0 0 40px;line-height:1.6">İlaç sektörü satış temsilcileri için çeyreklik prim hesaplama ve performans takip platformu.</p>
+            <div style="display:flex;flex-direction:column;gap:12px">
+                @foreach (var (icon, text) in new[] { ("📊","Çeyreklik performans hesaplama"), ("🏆","Bölge bazlı sıralama ve badge'ler"), ("📨","Otomatik bildirim ve yayınlama") })
+                {
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <div style="width:32px;height:32px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px">@icon</div>
+                        <span style="font-size:13px;color:#94a3b8">@text</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Sağ panel — giriş formu -->
+    <div style="width:460px;display:flex;align-items:center;justify-content:center;padding:40px;background:rgba(10,15,26,0.7);border-left:1px solid rgba(255,255,255,0.04)">
+        <div style="width:100%;max-width:360px">
+
+            <div style="margin-bottom:32px">
+                <img src="/images/Kenvue.png" alt="Kenvue" style="height:36px;margin-bottom:20px;opacity:0.9" />
+                <h2 style="color:#f1f5f9;margin:0 0 4px;font-size:22px;font-weight:700">Hoş geldiniz</h2>
+                <p style="color:#64748b;margin:0;font-size:13px">Hesabınıza giriş yapın</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMsg))
+            {
+                <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:11px 14px;margin-bottom:18px;display:flex;align-items:center;gap:10px">
+                    <span style="font-size:16px">⚠️</span>
+                    <span style="color:#f87171;font-size:13px">@errorMsg</span>
+                </div>
+            }
+
+            <div style="margin-bottom:14px">
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Kullanıcı Adı</label>
+                <div style="position:relative">
+                    <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;opacity:0.5">👤</span>
+                    <input type="text" @bind="username" @bind:event="oninput" placeholder="AhmetYı"
+                           style="width:100%;padding:11px 14px 11px 38px;background:#0d1424;border:1px solid #1e293b;border-radius:10px;color:#f1f5f9;font-size:14px;outline:none;box-sizing:border-box;transition:border-color 0.2s" />
+                </div>
+            </div>
+
+            <div style="margin-bottom:6px">
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Şifre</label>
+                <div style="position:relative">
+                    <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;opacity:0.5">🔒</span>
+                    <input type="password" @bind="password" @bind:event="oninput" @onkeypress="HandleKeyPress" placeholder="••••••••"
+                           style="width:100%;padding:11px 14px 11px 38px;background:#0d1424;border:1px solid #1e293b;border-radius:10px;color:#f1f5f9;font-size:14px;outline:none;box-sizing:border-box;transition:border-color 0.2s" />
+                </div>
+            </div>
+
+            <div style="text-align:right;margin-bottom:22px;margin-top:8px">
+                <a href="/forgot-password" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500">Şifremi Unuttum?</a>
+            </div>
+
+            <button @onclick="DoLogin" disabled="@isLoading"
+                    style="width:100%;padding:13px;background:linear-gradient(135deg,#6366f1,#3b82f6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.02em;box-shadow:0 4px 16px rgba(99,102,241,0.35);transition:opacity 0.2s;opacity:@(isLoading ? "0.7" : "1")">
+                @(isLoading ? "⏳ Giriş yapılıyor..." : "Giriş Yap →")
+            </button>
+
+            <p style="text-align:center;margin-top:24px;font-size:11px;color:#334155">Kenvue Prim Sistemi · @DateTime.Now.Year</p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private string errorMsg = "";
+    private bool isLoading = false;
+    private bool _sessionChecked = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (Session.IsLoggedIn)
+                Nav.NavigateTo("/");
+        }
+    }
+
+    private async Task HandleKeyPress(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await DoLogin();
+    }
+
+    private async Task DoLogin()
+    {
+        errorMsg = "";
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            errorMsg = "Kullanıcı adı ve şifre giriniz";
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            // SignalR bağlantısının HttpContext'i üzerinden istemci IP'si (oturum audit'i için)
+            var clientIp = HttpCtx.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+            var user = await Auth.LoginAsync(username, password, clientIp);
+            if (user == null)
+            {
+                errorMsg = "Kullanıcı adı veya şifre hatalı";
+                return;
+            }
+
+            await Session.LoginAsync(user, SessionStorage);
+            await Session.PersistSessionAsync(SessionStorage);
+            Nav.NavigateTo(user.MustChangePassword ? "/change-password" : "/");
+        }
+        catch (LoginLockedException ex)
+        {
+            errorMsg = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMsg = "Bağlantı hatası: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

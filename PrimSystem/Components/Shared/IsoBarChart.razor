@@ -1,0 +1,56 @@
+@using System.Globalization
+
+@* Saf CSS 3D izometrik bar chart — her bar ön + üst + yan yüzlerden oluşur.
+   JS/Chart.js gerektirmez; Blazor SSR ile sorunsuz render olur. *@
+
+@{
+    var maxVal = MaxValue ?? (Items.Any() ? Items.Max(i => i.Value) : 1m);
+    if (maxVal <= 0) maxVal = 1m;
+}
+
+<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:14px;height:@(ChartHeight + 60)px;padding:10px 6px 0;overflow-x:auto">
+    @foreach (var item in Items)
+    {
+        var frac = Math.Clamp((double)(item.Value / maxVal), 0, 1);
+        var h = Math.Max((int)(frac * ChartHeight), 4);
+        var hPx = h.ToString(CultureInfo.InvariantCulture);
+        var color = item.Color ?? "#6366f1";
+        <div class="isobar-col" title="@($"{item.Label}: {item.Value:N1}{ValueSuffix}")">
+            <div style="font-size:11px;font-family:monospace;font-weight:700;color:@color;margin-bottom:6px;text-align:center">
+                @($"{item.Value:N1}{ValueSuffix}")
+            </div>
+            <div class="isobar" style="height:@(hPx)px">
+                <div class="isobar-top" style="background:@Lighten(color)"></div>
+                <div class="isobar-side" style="background:@Darken(color);height:@(hPx)px"></div>
+                <div class="isobar-front" style="background:linear-gradient(180deg,@color,@(color)cc);height:@(hPx)px"></div>
+            </div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:10px;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@item.Label">
+                @item.Label
+            </div>
+        </div>
+    }
+    @if (!Items.Any())
+    {
+        <div style="color:#64748b;font-size:12px;align-self:center">Veri yok</div>
+    }
+</div>
+
+@code {
+    public record Item(string Label, decimal Value, string? Color = null);
+
+    /// <summary>Çizilecek barlar (etiket, değer, opsiyonel renk)</summary>
+    [Parameter, EditorRequired] public List<Item> Items { get; set; } = new();
+
+    /// <summary>Ölçek tavanı (null = en büyük değer)</summary>
+    [Parameter] public decimal? MaxValue { get; set; }
+
+    /// <summary>Değer etiketinin soneki (ör. "%")</summary>
+    [Parameter] public string ValueSuffix { get; set; } = "";
+
+    /// <summary>Bar alanı yüksekliği (px)</summary>
+    [Parameter] public int ChartHeight { get; set; } = 180;
+
+    // Üst/yan yüzler için basit ton varyasyonları — hex'e alfa eklemek yeterli derinlik verir
+    private static string Lighten(string hex) => hex + "f2"; // üst yüz: hafif parlak
+    private static string Darken(string hex) => hex + "66";  // yan yüz: gölgeli
+}

@@ -1,0 +1,144 @@
+@using PrimSystem.Data
+@using PrimSystem.Services
+@inject CalculationService CalcSvc
+
+@if (Publish != null)
+{
+    <div class="card3d" style="background:linear-gradient(135deg,rgba(17,24,39,0.98),rgba(11,17,32,0.98));border:1px solid rgba(99,102,241,0.3);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 4px 24px rgba(99,102,241,0.15)">
+
+        <!-- Başlık -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:10px">
+                <div style="font-size:20px">📦</div>
+                <div>
+                    <div style="font-size:14px;font-weight:700;color:#f1f5f9">Sipariş Liderlik Tablosu</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:2px">
+                        @if (Publish.Product != null)
+                        {
+                            <span style="color:#818cf8;font-weight:600">@Publish.Product.Name özelinde</span>
+                        }
+                        else
+                        {
+                            <span>Tüm ürünler</span>
+                        }
+                        @if (Publish.Year.HasValue && !string.IsNullOrEmpty(Publish.Quarter))
+                        {
+                            <span style="margin-left:6px">· @Publish.Year @Publish.Quarter</span>
+                        }
+                        else
+                        {
+                            <span style="margin-left:6px">· Tüm zamanlar</span>
+                        }
+                        <span style="margin-left:8px;color:#10b981">● Yayında</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;font-size:10px;color:#475569">
+                <span>Kutu</span><span style="color:#334155">·</span>
+                <span>TL</span><span style="color:#334155">·</span>
+                <span>Eczane</span>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="text-align:center;color:#475569;font-size:12px;padding:20px">⏳ Yükleniyor...</div>
+        }
+        else if (!rows.Any())
+        {
+            <div style="text-align:center;color:#475569;font-size:12px;padding:20px">Sipariş verisi bulunamadı.</div>
+        }
+        else
+        {
+            <!-- Top 3 -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+                @foreach (var r in rows.Take(3))
+                {
+                    var isMe = r.UserId == CurrentUserId;
+                    var (medal, bg, border) = r.Rank switch
+                    {
+                        1 => ("🥇", "linear-gradient(135deg,rgba(251,191,36,0.15),rgba(245,158,11,0.08))", "rgba(251,191,36,0.4)"),
+                        2 => ("🥈", "linear-gradient(135deg,rgba(148,163,184,0.15),rgba(100,116,139,0.08))", "rgba(148,163,184,0.4)"),
+                        _ => ("🥉", "linear-gradient(135deg,rgba(180,83,9,0.15),rgba(146,64,14,0.08))", "rgba(180,83,9,0.35)")
+                    };
+                    var cardStyle = $"background:{bg};border:1px solid {border}" + (isMe ? ";outline:2px solid #6366f1;outline-offset:2px" : "") + ";border-radius:10px;padding:12px;text-align:center";
+                    <div style="@cardStyle">
+                        <div style="font-size:22px;margin-bottom:4px">@medal</div>
+                        <div style="font-size:12px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@r.FullName</div>
+                        <div style="font-size:10px;color:#64748b;margin-bottom:8px">@r.Region</div>
+                        <div style="display:flex;flex-direction:column;gap:3px">
+                            <div style="font-size:11px;color:#fbbf24;font-weight:600">@r.TotalBoxes.ToString("N0") kutu</div>
+                            <div style="font-size:10px;color:#10b981">@r.TotalTL.ToString("N0") ₺</div>
+                            <div style="font-size:10px;color:#818cf8">@r.UniquePharmacies eczane</div>
+                        </div>
+                        @if (isMe)
+                        {
+                            <div style="margin-top:6px;font-size:9px;color:#6366f1;font-weight:700">SİZ</div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- 4-10 arası -->
+            @if (rows.Count > 3)
+            {
+                <div style="border-top:1px solid #1e293b;padding-top:10px">
+                    @foreach (var r in rows.Skip(3).Take(7))
+                    {
+                        var isMe = r.UserId == CurrentUserId;
+                        var rowStyle = "display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;" + (isMe ? "background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);" : "") + "margin-bottom:3px";
+                        <div style="@rowStyle">
+                            <span style="width:22px;text-align:center;font-size:11px;color:#475569;font-weight:700">#@r.Rank</span>
+                            <div style="flex:1;min-width:0">
+                                <div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@r.FullName @(isMe ? "👤" : "")</div>
+                                <div style="font-size:10px;color:#475569">@r.Region</div>
+                            </div>
+                            <div style="text-align:right;flex-shrink:0">
+                                <div style="font-size:11px;color:#fbbf24;font-weight:600">@r.TotalBoxes.ToString("N0") kutu</div>
+                                <div style="font-size:10px;color:#64748b">@r.TotalTL.ToString("N0") ₺ · @r.UniquePharmacies ecz.</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Kullanıcının kendi sırası (top 10 dışındaysa) -->
+            @if (rows.FirstOrDefault(r => r.UserId == CurrentUserId) is {} myRow && myRow.Rank > 10)
+            {
+                <div style="border-top:1px solid #1e293b;padding-top:8px;margin-top:4px">
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3)">
+                        <span style="width:22px;text-align:center;font-size:11px;color:#818cf8;font-weight:700">#@myRow.Rank</span>
+                        <div style="flex:1">
+                            <div style="font-size:12px;font-weight:600;color:#818cf8">@myRow.FullName 👤 (Siz)</div>
+                            <div style="font-size:10px;color:#475569">@myRow.Region</div>
+                        </div>
+                        <div style="text-align:right">
+                            <div style="font-size:11px;color:#fbbf24;font-weight:600">@myRow.TotalBoxes.ToString("N0") kutu</div>
+                            <div style="font-size:10px;color:#64748b">@myRow.TotalTL.ToString("N0") ₺ · @myRow.UniquePharmacies ecz.</div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public OrderLeaderboardPublish? Publish { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+
+    private List<OrderLeaderRow> rows = new();
+    private bool isLoading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Publish == null) return;
+        isLoading = true;
+        try
+        {
+            rows = await CalcSvc.GetOrderLeaderboardAsync(Publish.ProductId, Publish.Year, Publish.Quarter);
+        }
+        catch { rows = new(); }
+        isLoading = false;
+    }
+}

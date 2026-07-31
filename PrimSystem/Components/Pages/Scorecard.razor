@@ -1,0 +1,1081 @@
+@page "/scorecard"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@inject CalculationService CalcSvc
+@inject AuditService Audit
+@rendermode InteractiveServer
+
+@if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+    return;
+}
+@if (!Session.CanManage)
+{
+    <NotAuthorizedView />
+    return;
+}
+
+<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+
+    <div style="max-width:1200px;margin:0 auto;padding:20px">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Scorecard Yonetimi</div>
+                <div style="font-size:11px;color:#475569">Urun agirliklari ve prim yapilandirmasi</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="padding:4px 12px;border-radius:8px;font-size:12px;font-weight:700;background:@(totalWeight == 100 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)");color:@(totalWeight == 100 ? "#10b981" : "#ef4444");border:1px solid @(totalWeight == 100 ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)")">
+                    Toplam: @totalWeight/100
+                </span>
+                @if (Session.CanManage)
+                {
+                    <button @onclick="ShowAddDialog" style="padding:7px 15px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">+ Urun Ekle</button>
+                }
+            </div>
+        </div>
+
+        <!-- AKTİFLE: tek tıkla Yeniden Hesapla + Yayınla (ağırlık değişikliklerini canlıya alır) -->
+        <div style="background:#111827;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+            <span style="font-size:12px;font-weight:700;color:#f1f5f9">⚡ Değişiklikleri Aktifle</span>
+            <select @bind="activateYear" disabled="@isActivating" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select @bind="activateQuarter" disabled="@isActivating" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+            </select>
+            <button @onclick="StartActivate" disabled="@isActivating"
+                    style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
+                @(isActivating ? "⏳ Aktifleniyor..." : "⚡ Aktifle (Yeniden Hesapla + Yayınla)")
+            </button>
+            <span style="color:#64748b;font-size:11px;margin-left:auto">Ağırlık değişiklikleri yalnız yeniden hesaplanıp yayınlandığında rapor/prim ekranlarına yansır.</span>
+        </div>
+
+        @if (showActivateConfirm)
+        {
+            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px;margin-bottom:14px">
+                @if (activateIssues.Any())
+                {
+                    <div style="font-size:12.5px;font-weight:700;color:#ef4444;margin-bottom:6px">⚠ Veri eksik — sonuç yanıltıcı olabilir:</div>
+                    <div style="font-size:11.5px;color:#f59e0b;margin-bottom:10px;display:flex;flex-direction:column;gap:3px">
+                        @foreach (var iss in activateIssues)
+                        {
+                            <div>• @iss</div>
+                        }
+                    </div>
+                }
+                <div style="font-size:12.5px;color:#f1f5f9;margin-bottom:10px">
+                    <strong>@activateQuarter @activateYear</strong> yeniden hesaplanıp <strong>yayınlanacak</strong>; ST'lere bildirim gidecek. Onaylıyor musun?
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button @onclick="ConfirmActivate" disabled="@isActivating"
+                            style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
+                        ⚡ Evet, Aktifle
+                    </button>
+                    <button @onclick="() => { showActivateConfirm = false; }" disabled="@isActivating"
+                            style="padding:7px 16px;background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:7px;font-size:12px;cursor:pointer">
+                        Vazgeç
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- KPI KRİTERLERİ -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <span style="font-size:11px;color:#64748b;font-weight:600">KPI AĞIRLIKLARI · @viewYear</span>
+            @if (kpiYearFallback)
+            {
+                <span style="padding:3px 10px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:11px;color:#f59e0b">
+                    @viewYear için tanım yok — önceki yılın değerleri gösteriliyor; kaydedince @viewYear için oluşturulur
+                </span>
+            }
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+            @foreach (var k in kpiList)
+            {
+                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;position:relative">
+                    <div style="font-size:10px;color:#64748b;margin-bottom:2px">@k.Name</div>
+                    <span style="font-size:22px;font-weight:700;color:#3b82f6">%@k.Weight</span>
+                    <span style="font-size:10px;color:#64748b;margin-left:6px">min %@k.MinRate</span>
+                    @if (Session.CanManage)
+                    {
+                        <button @onclick="() => StartEditKpi(k)"
+                                style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;color:#64748b;font-size:12px;padding:2px 4px;border-radius:4px">✏️</button>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- DÖNEM SEÇİCİ -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-size:11px;color:#64748b;font-weight:600">GÖRÜNTÜLEME/DÜZENLEME DÖNEMİ</span>
+            <select @bind="viewYear" @bind:after="LoadData" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <select @bind="viewQuarter" @bind:after="LoadData" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                <option value="ALL">Genel (aktif)</option>
+                <option value="Q1">Q1 (Oca-Mar)</option>
+                <option value="Q2">Q2 (Nis-Haz)</option>
+                <option value="Q3">Q3 (Tem-Eyl)</option>
+                <option value="Q4">Q4 (Eki-Ara)</option>
+            </select>
+            @if (viewQuarter != "ALL")
+            {
+                <span style="padding:3px 10px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:6px;font-size:11px;color:#3b82f6">
+                    @viewYear @viewQuarter başındaki ağırlıklar gösteriliyor
+                </span>
+            }
+            @if (Session.CanManage)
+            {
+                <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                    <span style="font-size:11px;color:#64748b">Değişiklik geçerlilik:</span>
+                    <select @bind="applyYear" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                        @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                    <select @bind="applyQuarter" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                        <option value="ALL">Geriye dönük (tümünü güncelle)</option>
+                        <option value="Q1">Q1'dan itibaren</option>
+                        <option value="Q2">Q2'den itibaren</option>
+                        <option value="Q3">Q3'ten itibaren</option>
+                        <option value="Q4">Q4'ten itibaren</option>
+                    </select>
+                </div>
+            }
+        </div>
+
+        <!-- MESAJ -->
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">
+                @message
+            </div>
+        }
+
+        <!-- ÜRÜN TABLOSU -->
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="background:#171f2e">
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">ÜRÜN GRUBU</th>
+                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">ÜRÜN</th>
+                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">AĞIRLIK</th>
+                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">MAX PUAN</th>
+                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">MİN %</th>
+                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">PRİM</th>
+                        @if (Session.CanManage)
+                        {
+                            <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">İŞLEM</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in products)
+                    {
+                        var w = weights.FirstOrDefault(x => x.ProductId == p.ProductId);
+                        var weightVal = w?.Weight ?? 0;
+                        var isOTC = p.ProductGroup == "OTC";
+                        <tr @key="p.ProductId" style="border-bottom:1px solid #1e293b;opacity:@(p.IsPrimEligible ? "1" : "0.45")">
+                            <td style="padding:9px 14px">
+                                @if (Session.CanManage && editingId == p.ProductId)
+                                {
+                                    <select @bind="editGroup" style="background:#0a0f1a;color:@(editGroup == "OTC" ? "#10b981" : "#f59e0b");border:1px solid #1e293b;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700">
+                                        <option value="OTC">OTC</option>
+                                        <option value="ITR">ITR</option>
+                                    </select>
+                                }
+                                else
+                                {
+                                    <span style="padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:@(isOTC ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(isOTC ? "#10b981" : "#f59e0b");border:1px solid @(isOTC ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)")">@p.ProductGroup</span>
+                                }
+                            </td>
+                            <td style="padding:9px 14px;color:#f1f5f9;font-weight:500">
+                                @p.Name
+                                @if (Session.CanManage && editingId == p.ProductId)
+                                {
+                                    <div style="margin-top:5px">
+                                        <input @bind="editAlias" @bind:event="oninput" placeholder="InfiniLens marka adı; çoklu için ; ile ayır"
+                                               style="width:100%;max-width:320px;background:#0a0f1a;color:#cbd5e1;border:1px solid #1e293b;border-radius:5px;padding:4px 8px;font-size:11px" />
+                                        <div style="font-size:9px;color:#475569;margin-top:2px">Sell-out/sipariş eşleşmesi. Örn: JOHNSON'S BABY;NEUTROGENA;CAREFREE</div>
+                                    </div>
+                                }
+                                else if (!string.IsNullOrEmpty(p.ImportAlias) && p.ImportAlias != p.Name)
+                                {
+                                    <span style="font-size:10px;color:#64748b;margin-left:6px">(InfiniLens: @p.ImportAlias)</span>
+                                }
+                            </td>
+                            <td style="padding:9px 14px;text-align:center">
+                                @if (Session.CanManage && editingId == p.ProductId)
+                                {
+                                    @* @bind:event="oninput" ŞART: varsayılan `change` yalnız odak kaybında
+                                       tetiklenir; kullanıcı değeri yazıp doğrudan ✓'e tıklayınca click,
+                                       change'den önce işlenip ESKİ değer kaydediliyordu. *@
+                                    <input type="number" min="0" max="100" @bind="editWeight" @bind:event="oninput" style="width:50px;text-align:center;background:#0a0f1a;color:#f1f5f9;border:1px solid #1e293b;border-radius:5px;padding:3px 6px;font-size:13px;font-weight:600" />
+                                }
+                                else
+                                {
+                                    <span style="font-weight:600;color:#f1f5f9">@weightVal</span>
+                                }
+                            </td>
+                            <td style="padding:9px 14px;text-align:center;color:#94a3b8;font-family:monospace;font-size:12px">
+                                @(p.IsPrimEligible && weightVal > 0 ? ((weightVal + 5.0) / 100).ToString("F2") : "—")
+                            </td>
+                            <td style="padding:9px 14px;text-align:center;color:#94a3b8;font-size:11px">
+                                @if (Session.CanManage && editingId == p.ProductId)
+                                {
+                                    <input type="number" min="0" max="100" @bind="editMinRatePct" @bind:event="oninput" style="width:52px;text-align:center;background:#0a0f1a;color:#f1f5f9;border:1px solid #1e293b;border-radius:5px;padding:3px 6px;font-size:12px" />
+                                    <span style="font-size:10px;color:#64748b;margin-left:2px">%</span>
+                                }
+                                else
+                                {
+                                    @(p.IsPrimEligible ? $"%{(int)Math.Round((w?.MinRate ?? 0.85m)*100)}" : "—")
+                                }
+                            </td>
+                            <td style="padding:9px 14px;text-align:center">
+                                @if (Session.CanManage && editingId == p.ProductId)
+                                {
+                                    <button @onclick="() => TogglePrim(p)" style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;background:@(editPrim ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(editPrim ? "#10b981" : "#ef4444");border:1px solid @(editPrim ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)")">
+                                        @(editPrim ? "Evet" : "Hayır")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:@(p.IsPrimEligible ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(p.IsPrimEligible ? "#10b981" : "#ef4444")">
+                                        @(p.IsPrimEligible ? "Evet" : "Hayır")
+                                    </span>
+                                }
+                            </td>
+                            @if (Session.CanManage)
+                            {
+                                <td style="padding:9px 14px;text-align:center">
+                                    @if (editingId == p.ProductId)
+                                    {
+                                        <button @onclick="RequestSave" style="background:none;border:none;cursor:pointer;color:#10b981;font-size:14px;margin-right:4px" title="Kaydet">✓</button>
+                                        <button @onclick="CancelEdit" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px" title="İptal">✗</button>
+                                    }
+                                    else if (confirmDeleteProductId == p.ProductId)
+                                    {
+                                        <button @onclick="() => ConfirmDeleteProduct(p)" style="padding:3px 10px;background:#ef4444;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Sil</button>
+                                        <button @onclick="() => confirmDeleteProductId = 0" style="padding:3px 10px;background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:6px;font-size:11px;cursor:pointer">Vazgeç</button>
+                                    }
+                                    else
+                                    {
+                                        <button @onclick="() => StartEdit(p, w)" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;margin-right:4px">✏️</button>
+                                        <button @onclick="() => expandedProductId = (expandedProductId == p.ProductId ? 0 : p.ProductId)" style="background:none;border:none;cursor:pointer;color:@(expandedProductId == p.ProductId ? "#3b82f6" : "#64748b");font-size:12px;margin-right:4px" title="Versiyon Geçmişi">📋</button>
+                                        <button @onclick="() => confirmDeleteProductId = p.ProductId" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:13px" title="Ürünü prim hesabından çıkar">🗑️</button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+
+                        @if (confirmDeleteProductId == p.ProductId)
+                        {
+                            <tr>
+                                <td colspan="@(Session.CanManage ? 7 : 6)" style="padding:10px 14px;background:rgba(239,68,68,0.08);border-bottom:1px solid rgba(239,68,68,0.3)">
+                                    <div style="font-size:12px;color:#f1f5f9">
+                                        <strong>@p.Name</strong> prim hesabından çıkarılacak.
+                                        @if (p.IsPrimEligible && weightVal > 0)
+                                        {
+                                            <span style="color:#ef4444;font-weight:700">
+                                                Toplam ağırlık @totalWeight → @(totalWeight - weightVal) olacak; tüm skorlar düşer.
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:#94a3b8">Ağırlığı @weightVal olduğu için toplam ağırlık değişmez (@totalWeight).</span>
+                                        }
+                                        <span style="color:#64748b"> Yansıması için sonra ⚡ Aktifle kullanın.</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+
+                        @if (expandedProductId == p.ProductId)
+                        {
+                            var history = allWeightsCache
+                                .Where(h => h.ProductId == p.ProductId)
+                                .OrderByDescending(h => h.ValidFrom)
+                                .ToList();
+                            <tr>
+                                <td colspan="@(Session.CanManage ? 7 : 6)" style="padding:0;background:#0a0f1a">
+                                    <div style="padding:10px 14px 12px 14px;border-bottom:2px solid #1e293b">
+                                        <div style="font-size:10px;font-weight:700;color:#475569;margin-bottom:8px;letter-spacing:0.08em">VERSİYON GEÇMİŞİ — @p.Name</div>
+                                        @if (!history.Any())
+                                        {
+                                            <div style="font-size:11px;color:#475569">Kayıt bulunamadı</div>
+                                        }
+                                        else
+                                        {
+                                            <div style="display:flex;flex-direction:column;gap:4px">
+                                                @foreach (var h in history)
+                                                {
+                                                    var isActive = h.ValidTo == null;
+                                                    <div style="display:flex;align-items:center;gap:16px;padding:6px 10px;border-radius:7px;background:@(isActive ? "rgba(16,185,129,0.06)" : "rgba(71,85,105,0.08)");border:1px solid @(isActive ? "rgba(16,185,129,0.2)" : "rgba(30,41,59,0.8)")">
+                                                        <div style="width:48px;text-align:center">
+                                                            <span style="padding:1px 7px;border-radius:4px;font-size:9px;font-weight:700;background:@(isActive ? "rgba(16,185,129,0.15)" : "rgba(71,85,105,0.2)");color:@(isActive ? "#10b981" : "#475569")">
+                                                                @(isActive ? "AKTİF" : $"v{h.VersionNo}")
+                                                            </span>
+                                                        </div>
+                                                        <div style="font-size:11px;color:#64748b;width:140px">
+                                                            Geçerlilik: <span style="color:#94a3b8">@h.ValidFrom.ToString("dd.MM.yyyy")</span>
+                                                            @if (h.ValidTo.HasValue)
+                                                            {
+                                                                <span style="color:#475569"> → @h.ValidTo.Value.ToString("dd.MM.yyyy")</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span style="color:#10b981"> → devam</span>
+                                                            }
+                                                        </div>
+                                                        <div style="font-size:12px;color:#94a3b8">Ağırlık: <span style="font-weight:700;color:#f1f5f9">@h.Weight</span></div>
+                                                        <div style="font-size:12px;color:#94a3b8">Min: <span style="font-weight:700;color:#f1f5f9">%@((int)Math.Round(h.MinRate*100))</span></div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ÜRÜN EKLEME DIALOG -->
+    @if (showAddDialog)
+    {
+        <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)" @onclick="CloseAddDialog">
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;width:450px" @onclick:stopPropagation>
+                <div style="display:flex;justify-content:space-between;margin-bottom:16px">
+                    <h3 style="margin:0;font-size:16px;color:#f1f5f9">Yeni Ürün Ekle</h3>
+                    <button @onclick="CloseAddDialog" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px">✗</button>
+                </div>
+
+                <div style="margin-bottom:12px">
+                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ürün Adı</label>
+                    <input @bind="newName" @bind:event="oninput" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" placeholder="Ürün adını girin" />
+                </div>
+
+                <div style="margin-bottom:12px">
+                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">InfiniLens Marka Adı (Import Alias)</label>
+                    <input @bind="newAlias" @bind:event="oninput" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" placeholder="BENGAY, NICORETTE GUM, vb." />
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ürün Grubu</label>
+                        <select @bind="newGroup" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <option value="OTC">OTC</option>
+                            <option value="ITR">ITR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ağırlık</label>
+                        <input type="number" @bind="newWeight" @bind:event="oninput" min="0" max="100" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" />
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Prim Dahil</label>
+                        <select @bind="newPrim" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <option value="true">Evet</option>
+                            <option value="false">Hayır</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(addError))
+                {
+                    <div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:8px;margin-bottom:12px;color:#ef4444;font-size:12px">@addError</div>
+                }
+
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                    <button @onclick="CloseAddDialog" style="padding:8px 16px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="AddProduct" style="padding:8px 16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Ekle</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- DEĞİŞİKLİK ONAY DIALOG -->
+    @if (showConfirmDialog)
+    {
+        <div style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)">
+            <div style="background:#111827;border:1px solid #334155;border-radius:14px;padding:24px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;font-size:16px">⚠️</div>
+                    <div>
+                        <div style="font-size:15px;font-weight:700;color:#f1f5f9">Değişikliği Onayla</div>
+                        <div style="font-size:11px;color:#64748b">@confirmProductName</div>
+                    </div>
+                </div>
+
+                <div style="background:#0a0f1a;border:1px solid #1e293b;border-radius:10px;padding:14px;margin-bottom:18px">
+                    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
+
+                        <!-- Ağırlık -->
+                        @if (confirmOriginalWeight != editWeight)
+                        {
+                            <div style="color:#94a3b8;text-align:right">
+                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">ESKİ AĞIRLIK</div>
+                                <span style="font-size:18px;font-weight:700;color:#ef4444">@confirmOriginalWeight</span>
+                            </div>
+                            <div style="color:#64748b;font-size:16px;text-align:center">→</div>
+                            <div style="color:#94a3b8">
+                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">YENİ AĞIRLIK</div>
+                                <span style="font-size:18px;font-weight:700;color:#10b981">@editWeight</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="grid-column:1/-1;color:#64748b;font-size:11px;text-align:center">Ağırlık değişmedi (@editWeight)</div>
+                        }
+                    </div>
+
+                    @if (confirmOriginalGroup != editGroup)
+                    {
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e293b;display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
+                            <div style="text-align:right">
+                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">ESKİ GRUP</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.1);color:#ef4444">@confirmOriginalGroup</span>
+                            </div>
+                            <div style="color:#64748b;font-size:16px;text-align:center">→</div>
+                            <div>
+                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">YENİ GRUP</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981">@editGroup</span>
+                            </div>
+                        </div>
+                    }
+
+                    @if (confirmOriginalPrim != editPrim)
+                    {
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e293b;display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
+                            <div style="text-align:right">
+                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">ESKİ PRİM</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:@(confirmOriginalPrim ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(confirmOriginalPrim ? "#10b981" : "#ef4444")">@(confirmOriginalPrim ? "Evet" : "Hayır")</span>
+                            </div>
+                            <div style="color:#64748b;font-size:16px;text-align:center">→</div>
+                            <div>
+                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">YENİ PRİM</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:@(editPrim ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(editPrim ? "#10b981" : "#ef4444")">@(editPrim ? "Evet" : "Hayır")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div style="margin-top:12px;padding:10px 12px;background:#0a0f1a;border:1px solid #1e293b;border-radius:8px;font-size:11px;color:#64748b">
+                    <span style="color:#f59e0b;font-weight:600">Geçerlilik: </span>
+                    @if (applyQuarter == "ALL")
+                    {
+                        <span>Geriye dönük — mevcut kayıt güncellenir (tüm dönemler etkilenir)</span>
+                    }
+                    else
+                    {
+                        <span style="color:#3b82f6;font-weight:600">@applyYear @applyQuarter</span><span>'dan itibaren yeni versiyon oluşturulur</span>
+                    }
+                </div>
+
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+                    <button @onclick="CancelConfirm" style="padding:9px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Vazgeç</button>
+                    <button @onclick="ConfirmSave" style="padding:9px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Onayla</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- KPI DÜZENLEME DIALOG -->
+    @if (showKpiDialog && editingKpi != null)
+    {
+        <div style="position:fixed;inset:0;z-index:1001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px)" @onclick="() => { showKpiDialog = false; editingKpi = null; }">
+            <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;width:360px;box-shadow:0 24px 60px rgba(0,0,0,0.5)" @onclick:stopPropagation>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+                    <div>
+                        <div style="font-size:15px;font-weight:700;color:#f1f5f9">KPI Düzenle</div>
+                        <div style="font-size:11px;color:#64748b;margin-top:2px">@editingKpi.Name</div>
+                    </div>
+                    <button @onclick="() => { showKpiDialog = false; editingKpi = null; }" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px">✕</button>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ağırlık (%)</label>
+                        <input type="number" min="0" max="100" @bind="kpiEditWeight" @bind:event="oninput"
+                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:14px;font-weight:700;box-sizing:border-box;text-align:center" />
+                    </div>
+                    <div>
+                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Min Oran (%)</label>
+                        <input type="number" min="0" max="100" @bind="kpiEditMinRate" @bind:event="oninput"
+                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:14px;font-weight:700;box-sizing:border-box;text-align:center" />
+                    </div>
+                </div>
+
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                    <button @onclick="() => { showKpiDialog = false; editingKpi = null; }" style="padding:8px 16px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="SaveKpi" style="padding:8px 16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Product> products = new();
+    private List<ScorecardWeight> weights = new();
+    private List<ScorecardWeight> allWeightsCache = new();
+    private List<KpiCriteria> kpiList = new();
+    private int totalWeight = 0;
+    private string message = "";
+
+    // Dönem görüntüleme/düzenleme
+    private int viewYear = DateTime.Now.Year;
+    private string viewQuarter = "ALL";
+
+    // Değişiklik geçerlilik dönemi
+    private int applyYear = DateTime.Now.Year;
+    private string applyQuarter = "ALL";
+
+    // KPI kartları viewYear'a ait mi, yoksa önceki yıldan şablon olarak mı gösteriliyor?
+    private bool kpiYearFallback = false;
+
+    // Aktifle (Yeniden Hesapla + Yayınla) — BrickManagement (P40) deseni
+    private int activateYear = DateTime.Now.Year;
+    private string activateQuarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+    private bool isActivating = false;
+    private bool showActivateConfirm = false;
+    private List<string> activateIssues = new();
+
+    // Edit state
+    private int editingId = 0;
+    private int editWeight = 0;
+    private int editMinRatePct = 85;
+    private string editGroup = "OTC";
+    private bool editPrim = true;
+    private string editAlias = "";
+
+    // Confirm dialog state
+    private bool showConfirmDialog = false;
+    private string confirmProductName = "";
+    private int confirmOriginalWeight = 0;
+    private string confirmOriginalGroup = "OTC";
+    private bool confirmOriginalPrim = true;
+
+    // Add dialog
+    private bool showAddDialog = false;
+    private string newName = "";
+    private string newAlias = "";
+    private string newGroup = "OTC";
+    private int newWeight = 5;
+    private string newPrim = "true";
+    private string addError = "";
+
+    // KPI edit
+    private bool showKpiDialog = false;
+    private KpiCriteria? editingKpi = null;
+    private int kpiEditWeight = 0;
+    private int kpiEditMinRate = 0;
+
+    // Version history
+    private int expandedProductId = 0;
+
+    // Silme onayı (iki aşamalı) — hangi ürün için onay satırı açık
+    private int confirmDeleteProductId = 0;
+
+    private bool _sessionChecked = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Aktifle varsayılanı: en son hesaplanmış dönem (BrickManagement ile aynı davranış).
+        try
+        {
+            var latest = await CalcSvc.GetLatestCalculatedAsync();
+            if (latest != null) { activateYear = latest.Value.Year; activateQuarter = latest.Value.Quarter; }
+        }
+        catch { /* dönem çözülemezse içinde bulunulan çeyrek varsayılanı kalır */ }
+
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        using var db = DbFactory.CreateDbContext();
+        products = await db.Products.Where(p => p.IsActive).OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync();
+
+        var allWeights = await db.ScorecardWeights.ToListAsync();
+        allWeightsCache = allWeights;
+
+        if (viewQuarter == "ALL")
+        {
+            // Aktif (ValidTo == null) ağırlıklar — mevcut scorecard
+            weights = allWeights
+                .Where(w => w.ValidTo == null)
+                .GroupBy(w => w.ProductId)
+                .Select(g => g.OrderByDescending(w => w.ValidFrom).ThenByDescending(w => w.WeightId).First())
+                .ToList();
+        }
+        else
+        {
+            // Seçilen quarter başındaki geçerli ağırlıklar
+            var viewDate = viewQuarter switch
+            {
+                "Q1" => new DateTime(viewYear, 1, 1),
+                "Q2" => new DateTime(viewYear, 4, 1),
+                "Q3" => new DateTime(viewYear, 7, 1),
+                "Q4" => new DateTime(viewYear, 10, 1),
+                _ => DateTime.UtcNow
+            };
+
+            weights = allWeights
+                .Where(w => w.ValidFrom <= viewDate)
+                .GroupBy(w => w.ProductId)
+                .Select(g => g.OrderByDescending(w => w.ValidFrom).ThenByDescending(w => w.WeightId).First())
+                .ToList();
+
+            // Hiç tarihsel veri yoksa aktif olanları göster
+            if (!weights.Any())
+                weights = allWeights
+                    .Where(w => w.ValidTo == null)
+                    .GroupBy(w => w.ProductId)
+                    .Select(g => g.OrderByDescending(w => w.ValidFrom).ThenByDescending(w => w.WeightId).First())
+                    .ToList();
+        }
+
+        // KPI ağırlıkları YIL bazlı saklanır ve CalculationService `k.Year == year` ile okur.
+        // Yıl filtresi olmadan (eski hâl) ekran en eski yılın satırını düzenliyor, hesaplama ise
+        // seçili yılın satırını okuyordu → değişiklik hesaplamaya hiç yansımıyordu.
+        // Artık ekran da viewYear'ı düzenler. Aynı ad için çift kayıt varsa EN YENİ (max CriteriaId)
+        // kazanır — CalculationService.PickKpi ile aynı yön.
+        var rawKpi = await db.KPICriteria
+            .Where(k => k.ValidTo == null && k.Year == viewYear)
+            .ToListAsync();
+        kpiYearFallback = false;
+        if (rawKpi.Count == 0)
+        {
+            // O yıl için hiç tanım yok → en yakın önceki yılın değerleri gösterilir (şablon olarak);
+            // kaydedildiğinde viewYear için yeni satır oluşturulur.
+            var fallbackYear = await db.KPICriteria
+                .Where(k => k.ValidTo == null && k.Year < viewYear)
+                .OrderByDescending(k => k.Year)
+                .Select(k => (int?)k.Year)
+                .FirstOrDefaultAsync();
+            if (fallbackYear.HasValue)
+            {
+                rawKpi = await db.KPICriteria
+                    .Where(k => k.ValidTo == null && k.Year == fallbackYear.Value)
+                    .ToListAsync();
+                kpiYearFallback = true;
+            }
+        }
+        kpiList = rawKpi
+            .GroupBy(k => k.Name)
+            .Select(g => g.OrderByDescending(k => k.CriteriaId).First())
+            .OrderBy(k => k.SortOrder).ThenBy(k => k.CriteriaId)
+            .ToList();
+        totalWeight = weights.Where(w => products.Any(p => p.ProductId == w.ProductId && p.IsPrimEligible)).Sum(w => w.Weight);
+    }
+
+    // Aktifle: veri kontrolü → onay paneli (dışa-dönük yayın için).
+    private async Task StartActivate()
+    {
+        if (isActivating) return;
+        activateIssues.Clear();
+        try
+        {
+            var dc = await CalcSvc.CheckDataAsync(activateYear, activateQuarter);
+            if (dc.PeriodCount < 3) activateIssues.Add($"Dönem eksik: {activateQuarter} için {dc.PeriodCount}/3 ay tanımlı");
+            if (dc.TargetCount == 0) activateIssues.Add("Hiç Hedef verisi yok — satış skoru 0 çıkar");
+            if (dc.SellOutCount == 0) activateIssues.Add("Hiç Sell-Out verisi yok — satış skoru 0 çıkar");
+        }
+        catch { /* veri kontrolü başarısızsa yine de onay göster */ }
+        showActivateConfirm = true;
+    }
+
+    // Onay → Yeniden Hesapla + Yayınla (tek adım).
+    private async Task ConfirmActivate()
+    {
+        if (isActivating) return;
+        isActivating = true;
+        showActivateConfirm = false;
+        StateHasChanged();
+        try
+        {
+            var result = await CalcSvc.CalculateQuarterAsync(activateYear, activateQuarter, Session.RequireUserId());
+            if (!result.Success)
+            {
+                message = $"⚠ Hesaplama başarısız: {(string.IsNullOrEmpty(result.Error) ? "bilinmeyen hata" : result.Error)}";
+            }
+            else
+            {
+                await CalcSvc.PublishAsync(activateYear, activateQuarter, Session.RequireUserId());
+                message = $"✅ {activateQuarter} {activateYear} yeniden hesaplandı ve yayınlandı — yeni ağırlıklar rapor, analiz ve ST ekranlarına aktarıldı.";
+            }
+        }
+        catch (UnauthorizedAccessException) { message = "⚠ Bu işlem için yetkiniz yok."; }
+        catch (Exception) { message = "⚠ Aktifleme başarısız oldu. Lütfen tekrar deneyin."; }
+        finally
+        {
+            isActivating = false;
+            StateHasChanged();
+            _ = ClearMessage();
+        }
+    }
+
+    private void StartEdit(Product p, ScorecardWeight? w)
+    {
+        editingId = p.ProductId;
+        editWeight = w?.Weight ?? 0;
+        editMinRatePct = (int)Math.Round((w?.MinRate ?? 0.85m) * 100);
+        editGroup = p.ProductGroup;
+        editPrim = p.IsPrimEligible;
+        editAlias = p.ImportAlias ?? "";
+
+        // Snapshot originals for confirm dialog
+        confirmProductName = p.Name;
+        confirmOriginalWeight = w?.Weight ?? 0;
+        confirmOriginalGroup = p.ProductGroup;
+        confirmOriginalPrim = p.IsPrimEligible;
+    }
+
+    private void CancelEdit() { editingId = 0; }
+    private void TogglePrim(Product p) { editPrim = !editPrim; }
+
+    private void RequestSave()
+    {
+        showConfirmDialog = true;
+    }
+
+    private void CancelConfirm()
+    {
+        showConfirmDialog = false;
+    }
+
+    private async Task ConfirmSave()
+    {
+        showConfirmDialog = false;
+        await SaveEdit();
+    }
+
+    private async Task SaveEdit()
+    {
+        using var db = DbFactory.CreateDbContext();
+        var product = await db.Products.FindAsync(editingId);
+        if (product == null) return;
+
+        // Üründeki TÜM aktif (ValidTo==null) satırları çek — çift aktif satır birikimini önle.
+        // En yenisi (max ValidFrom, sonra max WeightId) "geçerli" kabul edilir; diğerleri kapatılır.
+        var activeWeights = await db.ScorecardWeights
+            .Where(w => w.ProductId == editingId && w.ValidTo == null)
+            .OrderByDescending(w => w.ValidFrom).ThenByDescending(w => w.WeightId)
+            .ToListAsync();
+        var currentWeight = activeWeights.FirstOrDefault();
+
+        var newMinRate = editMinRatePct / 100m;
+        var newAliasValue = string.IsNullOrWhiteSpace(editAlias) ? product.Name : editAlias.Trim();
+
+        // Hiçbir alan değişmediyse yazma — sessiz "kaydettim ama değişmedi" durumunu engelle.
+        // (Bağlama bozulursa kullanıcı anında görür; eskiden aynı değer sessizce kaydediliyordu.)
+        if (currentWeight != null && ScoreCalculator.ScorecardEditIsNoOp(
+                currentWeight.Weight, editWeight,
+                currentWeight.MinRate, newMinRate,
+                product.ProductGroup, editGroup,
+                product.IsPrimEligible, editPrim,
+                product.ImportAlias, newAliasValue))
+        {
+            editingId = 0;
+            message = $"ℹ {product.Name}: değişiklik algılanmadı — değerler zaten aynı (ağırlık {editWeight}, min %{editMinRatePct}). Kayıt yapılmadı.";
+            _ = ClearMessage();
+            return;
+        }
+
+        product.ProductGroup = editGroup;
+        product.IsPrimEligible = editPrim;
+        product.ImportAlias = newAliasValue;
+        var oldWeightLabel = currentWeight != null ? $"{currentWeight.Weight}/%{(int)Math.Round(currentWeight.MinRate * 100)}" : "(yok)";
+        var stamp = DateTime.UtcNow;
+
+        if (applyQuarter == "ALL")
+        {
+            // Geriye dönük: geçerli kaydı güncelle, FAZLA aktif duplikeleri kapat (tek aktif kalsın)
+            if (currentWeight != null)
+            {
+                currentWeight.Weight = editWeight;
+                currentWeight.MinRate = newMinRate;
+                // Yerinde güncelleme yeni satır yaratmadığından CreatedAt değişmez; tazelik bandının
+                // "Yeniden Hesapla gerekli" uyarısını verebilmesi için UpdatedAt damgalanır.
+                currentWeight.UpdatedAt = stamp;
+                foreach (var dup in activeWeights.Skip(1))
+                    dup.ValidTo = currentWeight.ValidFrom; // eski duplike → kapat
+            }
+            else
+                db.ScorecardWeights.Add(new ScorecardWeight
+                {
+                    ProductId = editingId,
+                    Weight = editWeight,
+                    MinRate = newMinRate,
+                    Year = applyYear,
+                    ValidFrom = new DateTime(applyYear, 1, 1),
+                    VersionNo = 1,
+                    UpdatedAt = stamp
+                });
+        }
+        else
+        {
+            // Quarter'dan itibaren versiyon oluştur
+            var effectiveFrom = applyQuarter switch
+            {
+                "Q1" => new DateTime(applyYear, 1, 1),
+                "Q2" => new DateTime(applyYear, 4, 1),
+                "Q3" => new DateTime(applyYear, 7, 1),
+                "Q4" => new DateTime(applyYear, 10, 1),
+                _ => DateTime.UtcNow
+            };
+
+            // TÜM aktif satırları kapat (yalnız birini değil) → çift aktif satır kalmaz
+            foreach (var w in activeWeights)
+                w.ValidTo = effectiveFrom;
+
+            db.ScorecardWeights.Add(new ScorecardWeight
+            {
+                ProductId = editingId,
+                Weight = editWeight,
+                MinRate = newMinRate,
+                Year = applyYear,
+                ValidFrom = effectiveFrom,
+                ValidTo = null,
+                VersionNo = (currentWeight?.VersionNo ?? 0) + 1,
+                UpdatedAt = stamp
+            });
+        }
+
+        await db.SaveChangesAsync();
+        var productName = product.Name;
+        var savedProductId = editingId;
+        editingId = 0;
+
+        // NOT: iç içe interpolasyon ($"...{$"..."}...") Razor ayrıştırıcısını bozar (RZ1027/RZ1000);
+        // etiket önce ayrı değişkende kurulur.
+        var periodLabel = applyQuarter == "ALL" ? "geriye dönük" : $"{applyYear} {applyQuarter}'dan itibaren";
+
+        await Audit.LogAsync(Session.RequireUserId(), "SaveScorecardWeight", "ScorecardWeight", savedProductId,
+            oldValue: $"{productName}: {oldWeightLabel}",
+            newValue: $"{productName}: {editWeight}/%{editMinRatePct} ({periodLabel})");
+
+        message = $"{productName} güncellendi ({periodLabel}) — hesaplamaya yansıması için ⚡ Aktifle butonunu kullanın.";
+
+        // Çeyrek-bazlı değişiklik, daha ERKEN başlayan çeyrekleri ETKİLEMEZ (ValidFrom <= quarterStart
+        // filtresi). Kullanıcı bunu göremediği için sessizce "değişmedi" sanıyordu → açıkça uyar.
+        if (applyQuarter != "ALL")
+        {
+            var effFrom = CalculationService.QuarterStart(applyYear, applyQuarter);
+            var unaffected = await GetCalculatedQuartersNotAffected(effFrom);
+            if (unaffected.Any())
+                message += $" ⚠ Bu değişiklik {string.Join(", ", unaffected)} hesaplamasını ETKİLEMEZ (yalnız {applyYear} {applyQuarter} ve sonrası).";
+        }
+
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    /// <summary>
+    /// Hesaplaması bulunan ama verilen geçerlilik tarihinden ÖNCE başlayan çeyrekler —
+    /// yani bu değişiklikten etkilenmeyecek olanlar.
+    /// </summary>
+    private async Task<List<string>> GetCalculatedQuartersNotAffected(DateTime effectiveFrom)
+    {
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            var calced = await db.Calculations
+                .Select(c => new { c.Year, c.Quarter })
+                .Distinct()
+                .ToListAsync();
+            return calced
+                .Where(c => !CalculationService.AffectsQuarter(effectiveFrom, c.Year, c.Quarter))
+                .OrderByDescending(c => c.Year).ThenByDescending(c => c.Quarter)
+                .Select(c => $"{c.Year} {c.Quarter}")
+                .Take(4)
+                .ToList();
+        }
+        catch { return new List<string>(); }
+    }
+
+    // Silme iki aşamalı: 🗑️ onay satırını açar, "Sil" burayı çağırır.
+    // Ürün pasifleşince prim hesabından da düşer (CalculateQuarterAsync yalnız IsActive ürünleri okur),
+    // bu yüzden onay metninde toplam ağırlık etkisi gösteriliyor.
+    private async Task ConfirmDeleteProduct(Product p)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var tracked = await db.Products.FindAsync(p.ProductId);
+        if (tracked == null) return;
+        tracked.IsActive = false;
+        await db.SaveChangesAsync();
+        await Audit.LogAsync(Session.RequireUserId(), "DeleteProduct", "Product", p.ProductId,
+            oldValue: $"{p.Name} (aktif)", newValue: $"{p.Name} (pasif — prim hesabından çıkarıldı)");
+        confirmDeleteProductId = 0;
+        message = $"{p.Name} prim hesabından çıkarıldı — hesaplamaya yansıması için ⚡ Aktifle butonunu kullanın.";
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    private void ShowAddDialog()
+    {
+        showAddDialog = true;
+        newName = ""; newAlias = ""; newGroup = "OTC"; newWeight = 5; newPrim = "true"; addError = "";
+    }
+
+    private void CloseAddDialog() { showAddDialog = false; }
+
+    private async Task AddProduct()
+    {
+        using var db = DbFactory.CreateDbContext();
+        addError = "";
+        if (string.IsNullOrWhiteSpace(newName)) { addError = "Ürün adı giriniz"; return; }
+
+        var exists = await db.Products.AnyAsync(p => p.Name == newName);
+        if (exists) { addError = "Bu ürün zaten mevcut"; return; }
+
+        var product = new Product
+        {
+            Name = newName,
+            ImportAlias = string.IsNullOrWhiteSpace(newAlias) ? newName : newAlias,
+            ProductGroup = newGroup,
+            IsPrimEligible = newPrim == "true",
+            SortOrder = products.Count + 1,
+            IsActive = true
+        };
+        db.Products.Add(product);
+        await db.SaveChangesAsync();
+
+        if (product.IsPrimEligible)
+        {
+            var sw = new ScorecardWeight
+            {
+                ProductId = product.ProductId,
+                Weight = newWeight,
+                MinRate = 0.85m,
+                Year = DateTime.Now.Year,
+                // Yıl başı — DateTime.UtcNow olsaydı hesaplama `ValidFrom <= quarterStart` filtresi
+                // yüzünden yeni ürünü içinde bulunulan (ve geçmiş) çeyreklerden DIŞLAR, ağırlığı
+                // sessizce 0 sayılır ve toplam 100'ün altına düşerdi.
+                ValidFrom = new DateTime(DateTime.Now.Year, 1, 1),
+                VersionNo = 1,
+                UpdatedAt = DateTime.UtcNow
+            };
+            db.ScorecardWeights.Add(sw);
+            await db.SaveChangesAsync();
+        }
+
+        showAddDialog = false;
+        message = $"{newName} eklendi";
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    private void StartEditKpi(KpiCriteria k)
+    {
+        editingKpi = k;
+        kpiEditWeight = k.Weight;
+        kpiEditMinRate = k.MinRate;
+        showKpiDialog = true;
+    }
+
+    private async Task SaveKpi()
+    {
+        using var db = DbFactory.CreateDbContext();
+        if (editingKpi == null) return;
+
+        // CriteriaId'ye DEĞİL, (Year = viewYear, Name) eşleşmesine yaz: ekranda gösterilen satır
+        // başka bir yıla ait olabilir (fallback) ve hesaplama yalnız viewYear satırını okur.
+        var name = editingKpi.Name;
+        var targets = await db.KPICriteria
+            .Where(k => k.ValidTo == null && k.Year == viewYear && k.Name == name)
+            .ToListAsync();
+
+        var oldValue = targets.Count > 0 ? $"{targets[0].Weight}/%{targets[0].MinRate}" : "(yok)";
+        var now = DateTime.UtcNow;
+
+        // Değer aynıysa yazma — sessiz "değişmedi" durumunu engelle (SaveEdit ile aynı kural).
+        if (targets.Count > 0 && targets[0].Weight == kpiEditWeight && targets[0].MinRate == kpiEditMinRate)
+        {
+            showKpiDialog = false;
+            editingKpi = null;
+            message = $"ℹ {name}: değişiklik algılanmadı — değerler zaten aynı (%{kpiEditWeight}, min %{kpiEditMinRate}). Kayıt yapılmadı.";
+            _ = ClearMessage();
+            return;
+        }
+
+        if (targets.Count == 0)
+        {
+            // O yıl için tanım yok → şablondan (gösterilen satır) yeni kayıt oluştur.
+            db.KPICriteria.Add(new KpiCriteria
+            {
+                Name = name,
+                Weight = kpiEditWeight,
+                MinRate = kpiEditMinRate,
+                Year = viewYear,
+                SortOrder = editingKpi.SortOrder,
+                ValidFrom = new DateTime(viewYear, 1, 1),
+                VersionNo = 1,
+                UpdatedAt = now
+            });
+        }
+        else
+        {
+            // Aynı ad+yıl için birden çok aktif kopya olabiliyor → hepsini aynı değere çek ki
+            // hesaplamada hangi kopyanın seçildiği fark etmesin.
+            foreach (var k in targets)
+            {
+                k.Weight = kpiEditWeight;
+                k.MinRate = kpiEditMinRate;
+                k.UpdatedAt = now;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        await Audit.LogAsync(Session.RequireUserId(), "SaveKpiCriteria", "KpiCriteria", null,
+            oldValue: $"{viewYear} {name}: {oldValue}",
+            newValue: $"{viewYear} {name}: {kpiEditWeight}/%{kpiEditMinRate}");
+
+        showKpiDialog = false;
+        editingKpi = null;
+        message = $"{viewYear} · {name} güncellendi — hesaplamaya yansıması için ⚡ Aktifle butonunu kullanın.";
+        await LoadData();
+        _ = ClearMessage();
+    }
+
+    private int _msgVersion;
+
+    private async Task ClearMessage()
+    {
+        var v = ++_msgVersion;
+        await Task.Delay(3000);
+        if (v == _msgVersion) { message = ""; await InvokeAsync(StateHasChanged); }
+    }
+}

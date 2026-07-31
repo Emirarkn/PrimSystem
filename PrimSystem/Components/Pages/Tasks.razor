@@ -1,0 +1,223 @@
+@page "/gorevler"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject TaskService TaskSvc
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@rendermode InteractiveServer
+
+@if (!_sessionChecked)
+{
+    @* oturum restore bekleniyor *@
+}
+else if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+}
+else if (!Session.IsBM && !Session.IsST)
+{
+    <NotAuthorizedView />
+}
+else
+{
+    <div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+        <div style="max-width:960px;margin:0 auto;padding:22px 24px">
+
+            <div style="margin-bottom:18px">
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">📋 Görevler</div>
+                <div style="font-size:11px;color:#475569">
+                    @(Session.IsST ? "Size atanan görevler — durumu güncelleyin ve yorum yazın." : "Satış Temsilcilerinize görev atayın ve durumunu takip edin.")
+                </div>
+            </div>
+
+            <!-- ════ ATAYAN (BM/Admin/Yönetici): Görev Ata ════ -->
+            @if (canAssign)
+            {
+                <div style="background:rgba(17,24,39,0.85);border:1px solid rgba(99,102,241,0.18);border-radius:14px;padding:18px;margin-bottom:18px">
+                    <div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:12px">➕ Yeni Görev</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                        <div>
+                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">ATANAN</label>
+                            <select @bind="assignTarget" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                                <option value="team">👥 Tüm @(Session.IsBM ? "Bölgem" : "ST'ler")</option>
+                                @foreach (var st in stList)
+                                {
+                                    <option value="@st.UserId">@st.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">ÖNCELİK</label>
+                            <select @bind="priority" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                                <option value="Low">Düşük</option>
+                                <option value="Medium">Orta</option>
+                                <option value="High">Yüksek</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">BAŞLIK</label>
+                            <input @bind="title" placeholder="Görev başlığı" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;box-sizing:border-box" />
+                        </div>
+                        <div>
+                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">TERMİN (opsiyonel)</label>
+                            <input type="date" @bind="deadline" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;box-sizing:border-box" />
+                        </div>
+                        <div style="grid-column:1 / -1">
+                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">AÇIKLAMA (opsiyonel)</label>
+                            <textarea @bind="description" rows="2" placeholder="Detay…" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;box-sizing:border-box;resize:vertical"></textarea>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+                        <button @onclick="DoAssign" disabled="@busy" style="padding:8px 18px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+                            @(busy ? "Gönderiliyor…" : "Görev Ata")
+                        </button>
+                        @if (!string.IsNullOrEmpty(assignMsg))
+                        {
+                            <span style="font-size:12px;color:@(assignOk ? "#10b981" : "#ef4444")">@assignMsg</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Atadığım görevler -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                    <div style="font-size:14px;font-weight:700;color:#f1f5f9">📌 Atadığım Görevler</div>
+                    <select @bind="statusFilter" @bind:after="LoadAssigned" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                        <option value="All">Tümü</option>
+                        <option value="New">Yeni</option>
+                        <option value="InProgress">Devam eden</option>
+                        <option value="Completed">Tamamlanan</option>
+                        <option value="Rejected">Reddedilen</option>
+                    </select>
+                </div>
+                @if (!assignedTasks.Any())
+                {
+                    <div style="color:#475569;font-size:12px;font-style:italic;padding:12px 0">Henüz görev atamadınız.</div>
+                }
+                else
+                {
+                    @foreach (var t in assignedTasks)
+                    {
+                        <TaskCard Task="t" CurrentUserId="myId" IsAssignee="false" OnChanged="LoadAssigned" />
+                    }
+                }
+            }
+
+            <!-- ════ ATANAN (ST): Görevlerim ════ -->
+            @if (Session.IsST)
+            {
+                <div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:10px">📥 Görevlerim</div>
+                @if (!myTasks.Any())
+                {
+                    <div style="color:#475569;font-size:12px;font-style:italic;padding:12px 0">Size atanmış görev yok.</div>
+                }
+                else
+                {
+                    @foreach (var t in myTasks)
+                    {
+                        <TaskCard Task="t" CurrentUserId="myId" IsAssignee="true" OnChanged="LoadMine" />
+                    }
+                }
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    private bool _sessionChecked;
+    private int myId;
+    private bool canAssign;
+
+    private List<User> stList = new();
+    private List<TaskListItem> assignedTasks = new();
+    private List<TaskListItem> myTasks = new();
+
+    private string assignTarget = "team";
+    private string title = "";
+    private string description = "";
+    private string priority = "Medium";
+    private DateTime? deadline;
+    private string statusFilter = "All";
+
+    private bool busy = false;
+    private bool assignOk = false;
+    private string? assignMsg;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (!Session.IsLoggedIn) { Nav.NavigateTo("/login"); return; }
+            myId = Session.CurrentUser?.UserId ?? 0;
+            canAssign = Session.IsBM; // görev atama+takip yalnız BM'ye özel
+
+            if (canAssign)
+            {
+                await LoadStList();
+                await LoadAssigned();
+            }
+            if (Session.IsST) await LoadMine();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadStList()
+    {
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            var q = db.Users.Where(u => u.RoleId == RoleId.ST && u.IsActive && !u.IsDeleted);
+            if (Session.IsBM) q = q.Where(u => u.RegionId == Session.CurrentUser!.RegionId);
+            stList = await q.OrderBy(u => u.FullName).ToListAsync();
+        }
+        catch { stList = new(); }
+    }
+
+    private async Task LoadAssigned()
+    {
+        assignedTasks = await TaskSvc.GetAssignedByAsync(myId, statusFilter);
+        StateHasChanged();
+    }
+
+    private async Task LoadMine()
+    {
+        myTasks = await TaskSvc.GetMyTasksAsync(myId);
+        StateHasChanged();
+    }
+
+    private async Task DoAssign()
+    {
+        assignMsg = null;
+        if (string.IsNullOrWhiteSpace(title)) { assignOk = false; assignMsg = "Başlık zorunlu."; return; }
+        busy = true;
+        try
+        {
+            if (assignTarget == "team")
+            {
+                var res = await TaskSvc.AssignToTeamAsync(myId, title, description, deadline?.ToUniversalTime(), priority);
+                assignOk = res.Ok;
+                assignMsg = res.Ok ? $"✓ {res.Count} ST'ye görev atandı." : res.Error;
+            }
+            else if (int.TryParse(assignTarget, out var toId))
+            {
+                var res = await TaskSvc.AssignAsync(myId, toId, title, description, deadline?.ToUniversalTime(), priority);
+                assignOk = res.Ok;
+                assignMsg = res.Ok ? "✓ Görev atandı." : res.Error;
+            }
+            if (assignOk)
+            {
+                title = ""; description = ""; deadline = null; priority = "Medium";
+                await LoadAssigned();
+            }
+        }
+        catch (UnauthorizedAccessException) { assignOk = false; assignMsg = "Bu işlem için yetkiniz yok."; }
+        catch (Exception) { assignOk = false; assignMsg = "Görev atanamadı."; }
+        finally { busy = false; StateHasChanged(); }
+    }
+}

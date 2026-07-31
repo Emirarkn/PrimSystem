@@ -1,0 +1,330 @@
+@page "/eczaneler"
+@using PrimSystem.Services
+@using PrimSystem.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject SessionState Session
+@inject NavigationManager Nav
+@inject ProtectedSessionStorage SessionStorage
+@inject CalculationService CalcSvc
+@inject ImportService ImportSvc
+@inject ExportService ExportSvc
+@inject IJSRuntime JS
+@inject IDbContextFactory<AppDbContext> DbFactory
+@rendermode InteractiveServer
+
+@if (!_sessionChecked)
+{
+}
+else if (!Session.IsLoggedIn)
+{
+    <LoginRequired />
+}
+else
+{
+    <div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+        <div style="max-width:1100px;margin:0 auto;padding:24px">
+
+            <div style="margin-bottom:16px">
+                <div style="font-size:18px;font-weight:700;color:#f1f5f9">🏛 Eczane Analizi</div>
+                <div style="font-size:11px;color:#475569">
+                    @(Session.IsST ? "Brick'lerinizdeki eczaneler" : Session.IsBM ? "Bölgenizdeki eczaneler" : "Tüm eczaneler")
+                    — GLN bazında, brick gruplu, units &amp; TL (sell-out).
+                </div>
+            </div>
+
+            <!-- FİLTRELER -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+                <select @bind="year" @bind:after="LoadAsync" style="@SelStyle">
+                    @foreach (var y in years) { <option value="@y">@y</option> }
+                </select>
+                <select @bind="quarter" @bind:after="LoadAsync" style="@SelStyle">
+                    <option value="Q1">Q1</option><option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option><option value="Q4">Q4</option>
+                </select>
+                <select @bind="selectedProductId" @bind:after="LoadAsync" style="@SelStyle">
+                    <option value="">Tüm Ürünler</option>
+                    @foreach (var p in products) { <option value="@p.ProductId">@p.Name</option> }
+                </select>
+                @* Ziyaret planı ayrımı — "planlı" = o yıl PharmacyPlans'ta kaydı olan GLN *@
+                <select @bind="planFilter" @bind:after="LoadAsync" style="@SelStyle" title="Ziyaret planına alınmış eczaneleri ayırır">
+                    <option value="">Planlı + Plansız</option>
+                    <option value="planned">📋 Yalnız planlı</option>
+                    <option value="unplanned">Yalnız plansız</option>
+                </select>
+                @if (Session.CanViewAll)
+                {
+                    <select @bind="filterRegionId" @bind:after="LoadAsync" style="@SelStyle">
+                        <option value="">Tüm Bölgeler</option>
+                        @foreach (var rg in regions) { <option value="@rg.RegionId">@rg.Name</option> }
+                    </select>
+                }
+                <input @bind="search" @bind:event="oninput" placeholder="🔍 Brick / şehir ara…" style="@SearchStyle" />
+                <select @bind="sortKey" style="@SelStyle">
+                    <option value="box">Sırala: Kutu</option>
+                    <option value="tl">Sırala: TL</option>
+                    <option value="count">Sırala: Eczane sayısı</option>
+                    <option value="name">Sırala: İsim</option>
+                </select>
+                <button @onclick="() => sortAsc = !sortAsc" style="@BtnStyle" title="Sıralama yönü">@(sortAsc ? "▲ Artan" : "▼ Azalan")</button>
+                <button @onclick="LoadAsync" style="@BtnStyle" disabled="@loading">🔄 Yenile</button>
+                <button @onclick="ExportAsync" style="@BtnStyle" disabled="@(loading || exporting || !summaries.Any())">@(exporting ? "⏳ Excel…" : "⬇ Excel")</button>
+                <div style="flex:1"></div>
+                <div style="font-size:12px;color:#94a3b8">
+                    <strong style="color:#f1f5f9">@summaries.Sum(s => s.PharmacyCount).ToString("N0")</strong> eczane ·
+                    <strong style="color:#10b981">@TotalBoxes.ToString("N0")</strong> kutu ·
+                    <strong style="color:#60a5fa">@TotalTL.ToString("N0")</strong> ₺
+                </div>
+            </div>
+
+            @if (loading)
+            {
+                <div style="color:#475569;font-size:13px;padding:20px;text-align:center">Yükleniyor…</div>
+            }
+            else if (!summaries.Any())
+            {
+                <div style="color:#475569;font-size:13px;padding:20px;text-align:center;font-style:italic">
+                    Bu dönem/kapsam için eczane (sell-out) verisi yok. Sell-out yüklü mü, dönem doğru mu kontrol edin.
+                </div>
+            }
+            else
+            {
+                var dispSummaries = DisplaySummaries();
+                <div style="font-size:11px;color:#475569;margin-bottom:8px">@dispSummaries.Count / @summaries.Count brick · bir brick'e tıklayıp eczanelerini açın · ⬇ Excel tüm detayı verir</div>
+                @if (!dispSummaries.Any())
+                {
+                    <div style="color:#475569;font-size:12px;font-style:italic;padding:12px;text-align:center">Aramayla eşleşen brick yok.</div>
+                }
+                @foreach (var bs in dispSummaries)
+                {
+                    var open = expanded.Contains(bs.BrickId);
+                    <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;margin-bottom:8px;overflow:hidden">
+                        <div @onclick="() => ToggleBrick(bs.BrickId)" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer">
+                            <div style="font-size:13px;font-weight:700;color:#f1f5f9">
+                                <span style="color:#60a5fa">@(open ? "▾" : "▸")</span> 🗺 @bs.BrickName
+                                <span style="color:#475569;font-weight:400;font-size:11px"> · @bs.PharmacyCount eczane@(string.IsNullOrWhiteSpace(bs.City) ? "" : " · " + bs.City)</span>
+                            </div>
+                            <div style="font-size:12px;color:#94a3b8">
+                                <strong style="color:#10b981">@bs.Boxes.ToString("N0")</strong> kutu ·
+                                <strong style="color:#60a5fa">@bs.AmountTL.ToString("N0")</strong> ₺</div>
+                        </div>
+                        @if (open)
+                        {
+                            <div style="padding:0 16px 12px">
+                                @if (!pharmaciesByBrick.ContainsKey(bs.BrickId))
+                                {
+                                    <div style="color:#475569;font-size:12px;padding:8px 0">Eczaneler yükleniyor…</div>
+                                }
+                                else
+                                {
+                                    var phs = SortPharmacies(pharmaciesByBrick[bs.BrickId]);
+                                    <table style="width:100%;border-collapse:collapse;font-size:12px">
+                                        <thead><tr>
+                                            @foreach (var h in HeaderCols) { <th style="padding:5px 8px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">@h</th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @foreach (var ph in phs)
+                                            {
+                                                <tr style="border-bottom:1px solid #1e293b22">
+                                                    <td style="padding:5px 8px;color:#f1f5f9">@(string.IsNullOrWhiteSpace(ph.KurumName) ? ph.GLN : ph.KurumName)</td>
+                                                    <td style="padding:5px 8px;color:#64748b">@(string.Join(" / ", new[] { ph.Ilce, ph.Il }.Where(x => !string.IsNullOrWhiteSpace(x))))</td>
+                                                    <td style="padding:5px 8px;color:#94a3b8;font-family:monospace;font-size:11px">@ph.GLN</td>
+                                                    <td style="padding:5px 8px;text-align:right;color:#10b981;font-family:monospace">@ph.Boxes.ToString("N0")</td>
+                                                    <td style="padding:5px 8px;text-align:right;color:#60a5fa;font-family:monospace">@ph.AmountTL.ToString("N0")</td>
+                                                    @if (Session.CanManage)
+                                                    {
+                                                        <td style="padding:5px 8px;text-align:right">
+                                                            @if (ph.InstitutionId > 0)
+                                                            {
+                                                                <select @onchange="@(e => ChangeBrick(ph.InstitutionId, e.Value?.ToString()))"
+                                                                        style="padding:2px 6px;background:#0a0f1a;border:1px solid rgba(139,92,246,0.3);border-radius:5px;color:#cbd5e1;font-size:10px">
+                                                                    <option value="">brick değiştir…</option>
+                                                                    @foreach (var b in bricks) { <option value="@b.BrickId">@b.Name</option> }
+                                                                </select>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (!string.IsNullOrEmpty(msg))
+            {
+                <div style="margin-top:10px;color:#10b981;font-size:12px">@msg</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool _sessionChecked;
+    private bool loading = true;
+    private string msg = "";
+
+    private int year = DateTime.Now.Year;
+    private string quarter = $"Q{(DateTime.Now.Month - 1) / 3 + 1}";
+    private int? selectedProductId;
+    private int? filterRegionId;
+    /// <summary>"" = tümü · "planned" = yalnız planlı · "unplanned" = yalnız plansız</summary>
+    private string planFilter = "";
+    /// <summary>Sorgulara giden üç durumlu değer; "" → null (yüklem hiç eklenmez).</summary>
+    private bool? PlannedOnly => planFilter switch { "planned" => true, "unplanned" => false, _ => (bool?)null };
+
+    // İstemci tarafı arama + sıralama (sunucuya gitmez).
+    private string search = "";
+    private string sortKey = "box"; // box | tl | count | name
+    private bool sortAsc = false;
+
+    private List<int> years = new();
+    private List<Product> products = new();
+    private List<Region> regions = new();
+    private List<Brick> bricks = new();
+    private List<BrickSummaryRow> summaries = new();
+    private readonly HashSet<int> expanded = new();
+    private readonly Dictionary<int, List<PharmacyRow>> pharmaciesByBrick = new();
+    private bool exporting;
+
+    private string SelStyle => "padding:6px 10px;background:#111827;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px";
+    private string SearchStyle => "padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;min-width:170px";
+    private string BtnStyle => "padding:6px 12px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.35);border-radius:7px;color:#60a5fa;font-size:12px;cursor:pointer";
+
+    // Arama (brick adı/şehir) + sıralama uygulanmış brick listesi.
+    private List<BrickSummaryRow> DisplaySummaries()
+    {
+        IEnumerable<BrickSummaryRow> rows = summaries;
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.Trim();
+            rows = rows.Where(s =>
+                (!string.IsNullOrEmpty(s.BrickName) && s.BrickName.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(s.City) && s.City.Contains(q, StringComparison.OrdinalIgnoreCase)));
+        }
+        Func<BrickSummaryRow, object> sel = sortKey switch
+        {
+            "tl" => s => s.AmountTL,
+            "count" => s => s.PharmacyCount,
+            "name" => s => s.BrickName,
+            _ => s => s.Boxes
+        };
+        rows = sortAsc ? rows.OrderBy(sel) : rows.OrderByDescending(sel);
+        return rows.ToList();
+    }
+
+    // Açılan brick'in eczane satırlarını aynı ölçütle sırala (count→kutu).
+    private List<PharmacyRow> SortPharmacies(List<PharmacyRow> list)
+    {
+        Func<PharmacyRow, object> sel = sortKey switch
+        {
+            "tl" => p => p.AmountTL,
+            "name" => p => (object)(p.KurumName ?? p.GLN ?? ""),
+            _ => p => p.Boxes
+        };
+        return (sortAsc ? list.OrderBy(sel) : list.OrderByDescending(sel)).ToList();
+    }
+    private string[] HeaderCols => Session.CanManage
+        ? new[] { "ECZANE (KURUM)", "İLÇE / İL", "GLN", "KUTU", "TL", "" }
+        : new[] { "ECZANE (KURUM)", "İLÇE / İL", "GLN", "KUTU", "TL" };
+
+    private decimal TotalBoxes => summaries.Sum(s => s.Boxes);
+    private decimal TotalTL => summaries.Sum(s => s.AmountTL);
+
+    private (int? userId, int? regionId) Scope()
+    {
+        int? userId = Session.IsST ? Session.CurrentUser!.UserId : (int?)null;
+        int? regionId = Session.IsBM ? Session.CurrentUser!.RegionId
+                      : (Session.CanViewAll ? filterRegionId : (int?)null);
+        return (userId, regionId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_sessionChecked)
+        {
+            _sessionChecked = true;
+            await Session.RestoreSessionAsync(SessionStorage);
+            if (!Session.IsLoggedIn) { Nav.NavigateTo("/login"); return; }
+            await InitAsync();
+            await LoadAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task InitAsync()
+    {
+        try
+        {
+            using var db = DbFactory.CreateDbContext();
+            years = await db.Periods.Select(p => p.Year).Distinct().OrderByDescending(y => y).ToListAsync();
+            if (!years.Contains(year)) years.Insert(0, year);
+            products = await db.Products.Where(p => p.IsActive && p.IsPrimEligible)
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync();
+            if (Session.CanViewAll)
+                regions = await db.Regions.OrderBy(r => r.Name).ToListAsync();
+            if (Session.CanManage)
+                bricks = await db.Bricks.Where(b => b.IsActive).OrderBy(b => b.Name).ToListAsync();
+        }
+        catch { }
+    }
+
+    private async Task LoadAsync()
+    {
+        // Varsayılan: brick ÖZETİ (hızlı, ~500 satır). Eczane detayı drill-down'da lazy gelir.
+        loading = true; msg = ""; expanded.Clear(); pharmaciesByBrick.Clear(); StateHasChanged();
+        try
+        {
+            var (userId, regionId) = Scope();
+            summaries = await CalcSvc.GetPharmacyBrickSummaryAsync(year, quarter, regionId, userId, selectedProductId, PlannedOnly);
+        }
+        catch { summaries = new(); }
+        finally { loading = false; StateHasChanged(); }
+    }
+
+    private async Task ToggleBrick(int brickId)
+    {
+        if (expanded.Contains(brickId)) { expanded.Remove(brickId); StateHasChanged(); return; }
+        expanded.Add(brickId); StateHasChanged();
+        if (!pharmaciesByBrick.ContainsKey(brickId))
+        {
+            try { pharmaciesByBrick[brickId] = await CalcSvc.GetPharmaciesForBrickAsync(brickId, year, quarter, selectedProductId, PlannedOnly); }
+            catch { pharmaciesByBrick[brickId] = new(); }
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        if (!summaries.Any() || exporting) return;
+        exporting = true; msg = ""; StateHasChanged();
+        try
+        {
+            // Tam detay (tüm eczaneler) yalnız export anında çekilir — kapsayıcı indeksle hızlı.
+            var (userId, regionId) = Scope();
+            var all = await CalcSvc.GetPharmaciesForScopeAsync(year, quarter, regionId, userId, selectedProductId, PlannedOnly);
+            var bytes = ExportSvc.ExportPharmacies(year, quarter, all);
+            var ek = planFilter switch { "planned" => "_Planli", "unplanned" => "_Plansiz", _ => "" };
+            await JS.InvokeVoidAsync("downloadBytes", $"Eczaneler_{year}_{quarter}{ek}.xlsx", bytes);
+        }
+        catch (Exception ex) { msg = "Export hatası: " + ex.Message; }
+        finally { exporting = false; StateHasChanged(); }
+    }
+
+    private async Task ChangeBrick(int institutionId, string? brickIdStr)
+    {
+        if (string.IsNullOrEmpty(brickIdStr) || !int.TryParse(brickIdStr, out var brickId)) return;
+        try
+        {
+            await ImportSvc.SaveInstitutionBrickAsync(institutionId, brickId, Session.RequireUserId());
+            msg = "✓ Eczanenin brick'i güncellendi (sonraki importlar ezmez). Yenileyince yeni gruba düşer.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { msg = "Hata: " + ex.Message; }
+        StateHasChanged();
+    }
+}

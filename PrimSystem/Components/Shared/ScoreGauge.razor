@@ -1,0 +1,69 @@
+@using System.Globalization
+
+@{
+    // Ring 0–105 aralığını temsil eder (cap %105); gate işareti %85'te
+    var maxVal = 1.05m;
+    var frac = (double)(Math.Clamp(Value, 0m, maxVal) / maxVal);
+    var gateFrac = (double)(Math.Clamp(Gate, 0m, maxVal) / maxVal);
+
+    var radius = 52.0;
+    var circumference = 2 * Math.PI * radius;
+    var dash = (frac * circumference).ToString("F2", CultureInfo.InvariantCulture);
+    var circ = circumference.ToString("F2", CultureInfo.InvariantCulture);
+
+    var color = ColorOverride ?? (Value >= Gate ? "#10b981" : Value >= 0.70m ? "#f59e0b" : "#ef4444");
+    var pctText = (Value * 100).ToString("F1");
+    var status = StatusText ?? (Value >= Gate ? "✅ GEÇTİ" : "❌ GATE ALTI");
+
+    // Gate çentiği: -90° başlangıçtan gateFrac kadar ileride, halkanın iç/dış kenarı arasında çizgi
+    var gateAngle = -Math.PI / 2 + gateFrac * 2 * Math.PI;
+    var cx = 60.0; var cy = 60.0;
+    var x1 = (cx + Math.Cos(gateAngle) * (radius - 7)).ToString("F2", CultureInfo.InvariantCulture);
+    var y1 = (cy + Math.Sin(gateAngle) * (radius - 7)).ToString("F2", CultureInfo.InvariantCulture);
+    var x2 = (cx + Math.Cos(gateAngle) * (radius + 7)).ToString("F2", CultureInfo.InvariantCulture);
+    var y2 = (cy + Math.Sin(gateAngle) * (radius + 7)).ToString("F2", CultureInfo.InvariantCulture);
+
+    var fontSize = Size >= 120 ? 22 : 16;
+    var statusSize = Size >= 120 ? 10 : 8;
+}
+
+<div style="width:@(Size)px;height:@(Size)px;position:relative;display:inline-block">
+    <svg viewBox="0 0 120 120" width="@Size" height="@Size" style="display:block">
+        <!-- Arka halka -->
+        <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="10" />
+        <!-- Skor halkası: -90°'den (üstten) başlar -->
+        <circle cx="60" cy="60" r="52" fill="none" stroke="@color" stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="@dash @circ"
+                transform="rotate(-90 60 60)"
+                style="transition:stroke-dasharray 0.8s ease" />
+        <!-- Gate çentiği (%85) -->
+        <line x1="@x1" y1="@y1" x2="@x2" y2="@y2" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
+    </svg>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+        <div style="font-size:@(fontSize)px;font-weight:900;font-family:monospace;color:@color;line-height:1">%@pctText</div>
+        @if (ShowStatus)
+        {
+            <div style="font-size:@(statusSize)px;font-weight:700;color:@color;margin-top:3px;letter-spacing:0.03em">@status</div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Skor (0–1.05 aralığında oran; ör. 0.873 = %87.3)</summary>
+    [Parameter] public decimal Value { get; set; }
+
+    /// <summary>Gate eşiği (ScoreCalculator.PassedGate ile aynı: 0.85)</summary>
+    [Parameter] public decimal Gate { get; set; } = 0.85m;
+
+    /// <summary>Piksel cinsinden kenar uzunluğu</summary>
+    [Parameter] public int Size { get; set; } = 140;
+
+    /// <summary>Merkezdeki durum yazısını özelleştir (null = otomatik GEÇTİ/GATE ALTI)</summary>
+    [Parameter] public string? StatusText { get; set; }
+
+    /// <summary>Renk eşiklerini ezmek için (ör. prim dışı dönemde amber)</summary>
+    [Parameter] public string? ColorOverride { get; set; }
+
+    /// <summary>Durum satırını göster/gizle (küçük gauge'larda gizlenebilir)</summary>
+    [Parameter] public bool ShowStatus { get; set; } = true;
+}

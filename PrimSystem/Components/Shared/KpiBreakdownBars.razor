@@ -1,0 +1,74 @@
+@using System.Globalization
+
+@{
+    var rows = SalesOnly
+        ? new[]
+        {
+            (Label: "Satış", Score: (decimal?)SalesScore, Weight: SalesWeight)
+        }
+        : new[]
+        {
+            (Label: "Satış",   Score: (decimal?)SalesScore, Weight: SalesWeight),
+            (Label: "Dağıtım", Score: DistScore,            Weight: DistWeight),
+            (Label: "Ruta",    Score: RutaScore,            Weight: RutaWeight),
+            (Label: "Sipariş", Score: OrderScore,           Weight: OrderWeight)
+        };
+}
+
+<div style="display:flex;flex-direction:column;gap:8px;min-width:220px">
+    @foreach (var r in rows)
+    {
+        if (r.Score.HasValue)
+        {
+            var pct = r.Score.Value * 100;
+            var barColor = r.Score.Value >= 0.85m ? "#10b981" : r.Score.Value >= 0.70m ? "#f59e0b" : "#ef4444";
+            // Bar genişliği 0–105 ölçeğinde (cap); CSS için invariant format şart
+            var width = (Math.Clamp((double)r.Score.Value, 0, 1.05) / 1.05 * 100).ToString("F1", CultureInfo.InvariantCulture);
+            <div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+                    <span style="font-size:11px;color:#94a3b8;font-weight:600">@r.Label
+                        <span style="font-size:9px;color:#475569;font-weight:500">· ağırlık %@r.Weight</span>
+                    </span>
+                    <span style="font-size:12px;font-family:monospace;font-weight:700;color:@barColor">%@pct.ToString("F1")</span>
+                </div>
+                <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+                    <div style="height:100%;width:@(width)%;background:linear-gradient(90deg,@barColor,@(barColor)99);border-radius:3px;transition:width 0.8s ease"></div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div style="opacity:0.45">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+                    <span style="font-size:11px;color:#94a3b8;font-weight:600">@r.Label
+                        <span style="font-size:9px;color:#475569;font-weight:500">· ağırlık %@r.Weight</span>
+                    </span>
+                    <span style="font-size:12px;font-family:monospace;color:#64748b">—</span>
+                </div>
+                <div style="height:5px;background:rgba(255,255,255,0.04);border-radius:3px"></div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Satış skoru (Calculation.TotalScore; 0–1.05 oran)</summary>
+    [Parameter] public decimal SalesScore { get; set; }
+
+    /// <summary>Dağıtım skoru (null = veri yok, soluk gösterilir)</summary>
+    [Parameter] public decimal? DistScore { get; set; }
+
+    /// <summary>Ruta uyum skoru</summary>
+    [Parameter] public decimal? RutaScore { get; set; }
+
+    /// <summary>Sipariş (strike rate) skoru — null ise FinalScore'da yeniden ağırlıklandırılır</summary>
+    [Parameter] public decimal? OrderScore { get; set; }
+
+    /// <summary>True ise yalnız Satış barı gösterilir (diğer KPI'lar gizli)</summary>
+    [Parameter] public bool SalesOnly { get; set; }
+
+    [Parameter] public int SalesWeight { get; set; } = 60;
+    [Parameter] public int DistWeight { get; set; } = 15;
+    [Parameter] public int RutaWeight { get; set; } = 15;
+    [Parameter] public int OrderWeight { get; set; } = 10;
+}
