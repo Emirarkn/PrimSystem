@@ -1,0 +1,16 @@
+# Varsayılan: metin dosyalarında satır sonunu Git yönetsin.
+* text=auto
+
+# ── Dışarıdan alınan (vendored) kütüphaneler ─────────────────────────
+# Satır sonu DÖNÜŞTÜRÜLMEZ. Sebep: chart.umd.min.js'in SHA-384 özeti
+# App.razor'da yorum olarak dokümante edildi; CRLF dönüşümü dosyayı
+# değiştirip taze bir clone'da bu doğrulamayı geçersiz kılardı.
+PrimSystem/wwwroot/lib/** -text
+
+# ── İkili dosyalar ───────────────────────────────────────────────────
+*.png binary
+*.jpg binary
+*.ico binary
+*.xlsx binary
+*.xls  binary
+*.pdf  binary
