@@ -1,227 +1,222 @@
 # PrimSystem
 
-Saha satış ekibi (ST / Satış Temsilcisi) için **çeyreklik prim hesaplama, performans skorlama ve saha analitiği** platformu. Farmasötik/OTC dağıtım modeline göre kurulmuş; brick (bölge kırılımı) bazlı hedef–gerçekleşen karşılaştırması yapar, 4 KPI'lı ağırlıklı skor üretir, skoru kademe tablosundan geçirerek TL prim tutarına çevirir.
+A **quarterly bonus calculation, performance scoring and field analytics** platform for field sales teams (ST / Sales Representatives). Built around a pharmaceutical/OTC distribution model, it compares target vs. actual at the brick (territory segment) level, produces a weighted score from 4 KPIs, and converts that score into a bonus amount (TRY) via a tier table.
 
 - **Platform:** .NET 8 · Blazor Server (Interactive Server render mode)
-- **Veritabanı:** SQL Server (EF Core 8.0.13, DbContextFactory deseni)
-- **Kod büyüklüğü:** ~22.400 satır (uygulama ~21.100 + test ~1.270), 47 Razor bileşeni, 12 servis, 40 entity
-- **Dil:** Arayüz ve kod yorumları Türkçe
+- **Database:** SQL Server (EF Core 8.0.13, DbContextFactory pattern)
+- **Code size:** ~22,400 lines (app ~21,100 + tests ~1,270), 47 Razor components, 12 services, 40 entities
+- **Language:** UI and code comments are in Turkish
 
 ---
 
-## 1. Ne yapar?
+## 1. What does it do?
 
-| Aşama | İçerik |
+| Stage | Details |
 |---|---|
-| **Veri girişi** | 8 farklı Excel şablonu (Sell-Out, Sipariş, Hedef, Ruta, Ziyaret Planı, Eczane Planı, Ürün-Marka master, Brick atama) dry-run önizleme + kalıcı yükleme ile içe aktarılır |
-| **Normalizasyon** | Türkçe İ/ı sorununu çözen kanonik anahtar, Levenshtein tabanlı eşleşme önerisi, kalıcı takma ad (NameAlias) hafızası |
-| **Skorlama** | Ürün ağırlıklı satış skoru + Ruta uyum + Dağıtım + Strike Rate → ağırlıklı final skor |
-| **Prim** | Final skor ≥ %85 gate → kademe çarpanı × rol bazlı taban tutar = TL prim |
-| **Yayın** | Admin hesaplar → inceler → yayınlar; ST/BM ancak yayınlandıktan sonra görür (beklet/devam et desteği) |
-| **Analitik** | Bölge / brick / eczane (GLN) / ürün kırılımlı raporlar, sipariş leaderboard'u, yıldız badge'leri, Excel dışa aktarım |
-| **Yan modüller** | Görev atama (BM→ST), saha fotoğrafı onay akışı, bildirim merkezi, oturum takibi, denetim kaydı (audit log) |
+| **Data input** | 8 different Excel templates (Sell-Out, Orders, Targets, Route, Visit Plan, Pharmacy Plan, Product-Brand master, Brick assignment) are imported with a dry-run preview + persistent upload |
+| **Normalization** | Canonical keys that solve the Turkish İ/ı casing problem, Levenshtein-based match suggestions, persistent alias (NameAlias) memory |
+| **Scoring** | Product-weighted sales score + Route compliance + Distribution + Strike Rate → weighted final score |
+| **Bonus** | Final score ≥ 85% gate → tier multiplier × role-based base amount = bonus (TRY) |
+| **Publishing** | Admin calculates → reviews → publishes; ST/BM users only see results after publishing (hold/resume supported) |
+| **Analytics** | Reports broken down by region / brick / pharmacy (GLN) / product, order leaderboard, star badges, Excel export |
+| **Side modules** | Task assignment (BM→ST), field photo approval workflow, notification center, session tracking, audit log |
 
 ---
 
-## 2. Skor modeli
+## 2. Scoring model
 
 ```
-Ürün skoru      = min(gerçekleşen / hedef, 1.05) × ürün_ağırlığı / 100
-Satış skoru     = Σ ürün skorları
-Ruta skoru      = RutaUyum.Rate (import edilen oran)
-Dağıtım skoru   = min(satış yapılan brick / atanan brick, 1.00)
-Strike skoru    = min(sipariş alınan planlı GLN / planlı GLN, 1.00)   [plan yoksa null]
+Product score       = min(actual / target, 1.05) × product_weight / 100
+Sales score         = Σ product scores
+Route score         = RutaUyum.Rate (imported rate)
+Distribution score  = min(bricks with sales / assigned bricks, 1.00)
+Strike score        = min(planned GLNs with orders / planned GLNs, 1.00)   [null if no plan]
 
-Final skor = 0.60·Satış + 0.15·Ruta + 0.15·Dağıtım + 0.10·Strike     (ağırlıklar KPICriteria'dan)
-Gate       = Final skor ≥ 0.85
-Prim (TL)  = eligible && gate ? RolePrimBase × PrimTier.Multiplier : 0
+Final score = 0.60·Sales + 0.15·Route + 0.15·Distribution + 0.10·Strike   (weights from KPICriteria)
+Gate        = Final score ≥ 0.85
+Bonus (TRY) = eligible && gate ? RolePrimBase × PrimTier.Multiplier : 0
 ```
 
-Ek kurallar:
+Additional rules:
 
-- **%105 cap** — hedef aşımı ödüllendirilmez, iade (negatif) skoru eksiye düşürmez (0'a tabanlanır).
-- **Kıdem eşiği** — `MonthsWorked(hireDate, quarterStart) < User.MinMonths` (varsayılan 3 ay) ise `IsEligible = false`, prim 0.
-- **Run-rate modu** (opsiyonel, `SystemSettings.RunRateMode`) — sell-out verisi olan dönem sayısına göre hedefi orantılar; 3 aylık hedefi 2 aylık satışla kıyaslama adaletsizliğini giderir.
-- **Ortak brick** — `UserBricks.SharePercent` ile hedef/sell-out/sipariş atıfı paylaştırılır (tek sahip = 100).
+- **105% cap** — over-achieving the target is not rewarded beyond the cap; returns (negative) do not push the score below zero (floored at 0).
+- **Tenure threshold** — if `MonthsWorked(hireDate, quarterStart) < User.MinMonths` (default 3 months), `IsEligible = false` and the bonus is 0.
+- **Run-rate mode** (optional, `SystemSettings.RunRateMode`) — prorates the target by the number of periods with sell-out data; fixes the unfairness of comparing a 3-month target against 2 months of sales.
+- **Shared bricks** — target/sell-out/order attribution is split via `UserBricks.SharePercent` (single owner = 100).
 
----
+> **Note:** The `ScorecardWeight.MinRate` and `KpiCriteria.MinRate` fields are saved and displayed on screen but are **not used** in the score calculation. Also, if product weights do not sum to 100, only a visual warning is shown and saving is not blocked; there is no sum check at all for KPI weights.
 
-> **Dikkat:** `ScorecardWeight.MinRate` ve `KpiCriteria.MinRate` alanları kaydediliyor ve ekranda gösteriliyor ancak **skor hesabında kullanılmıyor**. Ayrıca ürün ağırlıklarının toplamı 100 değilse yalnız görsel uyarı verilir, kayıt engellenmez; KPI ağırlıkları için hiçbir toplam kontrolü yoktur.
+### 2.1 Sales Representative (ST) Experience
 
----
+An ST logs in with their own account and sees **only their own data** (`specificUserId` filter + `publishedOnly: true`). An unpublished calculation never reaches the ST.
 
-## 2.1 Satış Temsilcisi (ST) Deneyimi
+The home page shows a single personal card:
 
-ST kendi hesabıyla girer ve **yalnızca kendi verisini** görür (`specificUserId` filtresi + `publishedOnly: true`). Yayınlanmamış hesaplama ST'ye hiç ulaşmaz.
+- **ScoreGauge** — final score ring with an 85% gate notch, on a 0–105 scale
+- **KpiBreakdownBars** — separate bars for the 4 KPIs, each with its weight label; a faded "—" when there is no data
+- **Bonus card** — the earned amount (₺) or the reason ("Threshold not met" / "Non-bonus period" / "No tier defined")
+- **Product detail** — target / actual / % rate per product, with a ↑ marker when the cap was applied
+- **Radar chart** — 4 KPIs + a dashed 85% threshold circle (Chart.js)
 
-Ana sayfada tek kişisel kart açılır:
+On the `/reports` and `/eczaneler` pages, the "My Brick Performance" and "Top Pharmacies in My Bricks" panels are narrowed to the ST's own scope. STs can also update task status, upload field photos and follow their notifications.
 
-- **ScoreGauge** — final skor halkası, üzerinde %85 gate çentiği, 0–105 ölçeğinde
-- **KpiBreakdownBars** — 4 KPI'nın ayrı barları, her birinin ağırlık etiketiyle; veri yoksa soluk "—"
-- **Prim kartı** — hak edilen tutar (₺) veya gerekçe ("Eşik aşılamadı" / "Prim dışı dönem" / "Tanımlı kademe yok")
-- **Ürün detayı** — ürün başına `Hdf / Grc / %oran`, cap uygulandıysa `↑` işareti
-- **Radar grafiği** — 4 KPI + kesikli %85 eşik çemberi (Chart.js)
+### 2.2 Web-Based Operation
 
-`/reports` ve `/eczaneler` sayfalarında ise "Brick Performansım" ve "Bricklerimdeki En İyi Eczaneler" panelleri kendi kapsamına daraltılır. ST ayrıca görev durumu günceller, saha fotoğrafı yükler ve bildirimlerini takip eder.
+The application runs on the server and is accessed from the browser (Blazor Server + SignalR). C# code is never sent to the client; the bonus formula and queries stay on the server. A circuit is kept on the server for each user.
 
----
+Deployment requirements:
 
-## 2.2 Web Tabanlı Çalışma
-
-Uygulama **sunucuda çalışır, tarayıcıdan erişilir** (Blazor Server + SignalR). C# kodu istemciye inmez; prim formülü ve sorgular sunucuda kalır. Her kullanıcı için sunucuda bir circuit tutulur.
-
-Canlıya alma gereksinimleri:
-
-| Gereksinim | Not |
+| Requirement | Note |
 |---|---|
-| Windows Server + IIS (ASP.NET Core Hosting Bundle) veya Linux + Kestrel/nginx | |
-| **WebSocket açık** reverse proxy | SignalR circuit'i için zorunlu |
-| **Sticky session** | `SessionStore` ve `LoginThrottle` bellek içi — çok sunuculu kurulumda şart |
-| HTTPS sertifikası | prod'da HSTS + HTTPS yönlendirme aktif |
-| Environment variable'lar | `ConnectionStrings__DefaultConnection`, `Smtp__Password`, `AppBaseUrl`, `AllowedHosts` |
-| SQL Server erişimi | uygulama hesabı bugün **DDL yetkisi** de istiyor (başlangıç self-heal bloğu) |
-| Yazılabilir disk | `logs/` (30 gün) + DataProtection anahtar klasörü |
-| İnternet erişimi (istemci) | **Chart.js CDN'den yükleniyor** — kapalı ağda grafikler sessizce boş kalır |
+| Windows Server + IIS (ASP.NET Core Hosting Bundle) | or Linux + Kestrel/nginx |
+| WebSocket-enabled reverse proxy | required for the SignalR circuit |
+| Sticky sessions | `SessionStore` and `LoginThrottle` are in-memory — mandatory in multi-server setups |
+| HTTPS certificate | HSTS + HTTPS redirection active in production |
+| Environment variables | `ConnectionStrings__DefaultConnection`, `Smtp__Password`, `AppBaseUrl`, `AllowedHosts` |
+| SQL Server access | the app account currently also needs **DDL permissions** (startup self-heal block) |
+| Writable disk | `logs/` (30 days) + DataProtection key folder |
+| Internet access (client) | **Chart.js is loaded from a CDN** — on a closed network, charts silently stay empty |
 
 ---
 
-## 3. Roller
+## 3. Roles
 
-| Rol | RoleId | Görebildiği |
+| Role | RoleId | Can see |
 |---|---|---|
-| **Admin** | 1 | Her şey: import, hesaplama, yayın, scorecard, prim ayarları, brick yönetimi, kontrol paneli, impersonation |
-| **Yonetici** (Kanal Müdürü) | 2 | Tüm bölgeler — Overview drill-down, organizasyon, ham hesaplama dışa aktarımı |
-| **BM** (Bölge Müdürü) | 3 | Kendi bölgesi — Bölge Analizi, görev atama, foto kontrol |
-| **ST** (Satış Temsilcisi) | 4 | Kendi sonuçları + kendi brick'lerindeki eczaneler, görevleri, fotoğraf yükleme |
+| **Admin** | 1 | Everything: import, calculation, publishing, scorecard, bonus settings, brick management, control panel, impersonation |
+| **Yonetici** (Channel Manager) | 2 | All regions — Overview drill-down, organization, raw calculation export |
+| **BM** (Regional Manager) | 3 | Own region — Region Analysis, task assignment, photo review |
+| **ST** (Sales Representative) | 4 | Own results + pharmacies in own bricks, tasks, photo upload |
 
-Yetki iki katmanda:
+Authorization works in two layers:
 
-1. **UI guard'ları** — Razor sayfalarında `SessionState` (`IsAdmin`, `CanManage`, `CanViewAll`) ile `LoginRequired` / `NotAuthorizedView` gösterimi.
-2. **Servis katmanı** — her çağrıda **DB'den taze** rol doğrulaması: `ImportService` 16, `CalculationService` 14, `AuthService` 2 metotta `EnsureAdminAsync`; `ExportService` `EnsureCanExportAllAsync` (Admin/Yonetici); `PhotoService` `CanReviewAsync` (Admin veya ilgili bölge BM'si); `TaskService` BM–ST ilişki kontrolü; `SessionState` impersonation'da admin'e bürünme yasağı.
+1. **UI guards** — Razor pages use `SessionState` (`IsAdmin`, `CanManage`, `CanViewAll`) to show `LoginRequired` / `NotAuthorizedView`.
+2. **Service layer** — fresh role verification from the DB on every call: `EnsureAdminAsync` in 16 `ImportService`, 14 `CalculationService` and 2 `AuthService` methods; `EnsureCanExportAllAsync` in `ExportService` (Admin/Yonetici); `CanReviewAsync` in `PhotoService` (Admin or the relevant region's BM); BM–ST relationship check in `TaskService`; `SessionState` forbids impersonating an admin.
 
-> Not: Bu doğrulamalar **yazma** işlemlerini kapsar. **Okuma kapsamı** (hangi rolün hangi kayıtları göreceği) servis imzasında değil, çağıran sayfanın geçirdiği filtre parametresinde belirlenir.
+> **Note:** These checks cover **write** operations. Read scope (which role sees which records) is not defined in the service signature, but by the filter parameter passed by the calling page.
 
-Kimlik doğrulama ASP.NET Core Identity kullanmaz; BCrypt + `SessionStore` + `ProtectedSessionStorage` ile kendi hafif katmanını kurar. `UserSessions` tablosu giriş/çıkış/IP/son görülme bilgisini tutar.
+Authentication does not use ASP.NET Core Identity; it builds its own lightweight layer with BCrypt + `SessionStore` + `ProtectedSessionStorage`. The `UserSessions` table stores login/logout/IP/last-seen information.
 
 ---
 
-## 4. Kurulum
+## 4. Setup
 
-### Gereksinimler
+### Requirements
+
 - .NET 8 SDK
-- SQL Server (LocalDB / Express / tam sürüm)
+- SQL Server (LocalDB / Express / full edition)
 - `dotnet-ef` 10.0.8 (local tool — `dotnet tool restore`)
 
-### Adımlar
+### Steps
 
 ```bash
-# 1) Bağımlılıklar
+# 1) Dependencies
 dotnet tool restore
 dotnet restore
 
-# 2) Bağlantı dizesi (geliştirme)
+# 2) Connection string (development)
 cd PrimSystem
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=PrimDB;Trusted_Connection=True;TrustServerCertificate=True;"
-dotnet user-secrets set "Smtp:Password" "SMTP_PAROLASI"
+dotnet user-secrets set "Smtp:Password" "SMTP_PASSWORD"
 
-# 3) Şema
-#    BOŞ veritabanı  → migration'ları uygula:
+# 3) Schema
+# EMPTY database → apply migrations:
 dotnet ef database update
-#    DOLU veritabanı → db/MIGRATIONS.md'deki baseline yöntemini izle (database update ÇALIŞTIRMA)
+# EXISTING database → follow the baseline method in db/MIGRATIONS.md (do NOT run database update)
 
-# 4) İndeksler ve ek şema scriptleri (idempotent)
+# 4) Indexes and extra schema scripts (idempotent)
 sqlcmd -S localhost -d PrimDB -i db/indexes.sql
 
-# 5) Çalıştır
+# 5) Run
 dotnet run
 ```
 
-Üretimde sırlar environment variable ile verilir (`Smtp__Password`, `ConnectionStrings__DefaultConnection`, `AppBaseUrl`, `AllowedHosts`) — ayrıntı: `PrimSystem/SECURITY-SETUP.md`.
+In production, secrets are provided via environment variables (`Smtp__Password`, `ConnectionStrings__DefaultConnection`, `AppBaseUrl`, `AllowedHosts`) — details: [`PrimSystem/SECURITY-SETUP.md`](PrimSystem/SECURITY-SETUP.md).
 
-### Testler
+### Tests
 
 ```bash
 dotnet test PrimSystem.Tests/PrimSystem.Tests.csproj
 ```
 
-> Not: `PrimSystem.slnx` yalnızca ana projeyi içerir; test projesi çözüme ekli değildir, bu yüzden yol açıkça verilmelidir.
+> **Note:** `PrimSystem.slnx` contains only the main project; the test project is not added to the solution, so its path must be given explicitly.
 
 ---
 
-## 5. Klasör yapısı
+## 5. Folder structure
 
 ```
 PrimSystem.slnx
 PrimSystem/
-  Program.cs                  # DI, Serilog, DataProtection, şema self-heal, güvenlik header'ları
+  Program.cs                  # DI, Serilog, DataProtection, schema self-heal, security headers
   Data/
-    Entities.cs               # 40 entity
-    AppDbContext.cs           # DbSet'ler, precision, indeks, cascade kuralları, soft-delete filtresi
+    Entities.cs               # 40 entities
+    AppDbContext.cs           # DbSets, precision, indexes, cascade rules, soft-delete filter
     RoleConstants.cs
   Services/
-    ScoreCalculator.cs        # SAF skor matematiği (test edilebilir çekirdek)
-    CalculationService.cs     # hesaplama + yayın + tüm analitik sorgular (2.107 satır)
-    ImportService.cs          # 8 Excel importu + eşleştirme + rollback (2.492 satır)
-    ExportService.cs          # EPPlus ile biçimli Excel çıktıları
+    ScoreCalculator.cs        # PURE score math (testable core)
+    CalculationService.cs     # calculation + publishing + all analytics queries (2,107 lines)
+    ImportService.cs          # 8 Excel imports + matching + rollback (2,492 lines)
+    ExportService.cs          # formatted Excel outputs with EPPlus
     AuthService.cs / SessionState.cs / SessionStore.cs / LoginThrottle.cs
     TaskService.cs / PhotoService.cs / NotificationService.cs / AuditService.cs / EmailService.cs
   Components/
-    Pages/                    # 23 sayfa (rota bazlı)
-    Shared/                   # 18 yeniden kullanılabilir bileşen
+    Pages/                    # 23 pages (route-based)
+    Shared/                   # 18 reusable components
     Layout/
-  Migrations/                 # 11 EF migration (InitialBaseline + artımlılar)
-  db/                         # 24 elle çalıştırılan SQL script + MIGRATIONS.md
+  Migrations/                 # 11 EF migrations (InitialBaseline + incrementals)
+  db/                         # 24 manually run SQL scripts + MIGRATIONS.md
   wwwroot/                    # app.css, fileUpload.js
-PrimSystem.Tests/             # 111 xUnit testi (skor, import doğrulama, export, auth, task)
+PrimSystem.Tests/             # 111 xUnit tests (score, import validation, export, auth, task)
 ```
 
 ---
 
-## 6. Rotalar
+## 6. Routes
 
-| Rota | Sayfa | Erişim |
+| Route | Page | Access |
 |---|---|---|
-| `/` | Ana Sayfa / Dashboard | Tüm roller (içerik role göre) |
-| `/reports` | Raporlar | Tüm roller (kapsam role göre daraltılır) |
-| `/eczaneler` | Eczane Analizi | Tüm roller (kapsam daraltılır) |
-| `/notifications` | Bildirimler | Tüm roller |
-| `/bolgem` | Bölge Analizi | BM |
-| `/gorevler` | Görevler | BM, ST |
+| `/` | Home / Dashboard | All roles (content depends on role) |
+| `/reports` | Reports | All roles (scope narrowed by role) |
+| `/eczaneler` | Pharmacy Analysis | All roles (scope narrowed) |
+| `/notifications` | Notifications | All roles |
+| `/bolgem` | Region Analysis | BM |
+| `/gorevler` | Tasks | BM, ST |
 | `/overview` | Türkiye Overview | Yonetici, Admin |
-| `/organization` | Organizasyon | Yonetici, Admin |
-| `/photos` | Fotoğraf Yükle | ST |
-| `/photo-review` | Foto Kontrol | Admin, BM |
-| `/calculate` · `/import` · `/periods` · `/scorecard` · `/prim-config` · `/bricks` · `/panel` · `/activity` | Yönetim | Admin |
-| `/login` · `/forgot-password` · `/reset-password` · `/change-password` | Kimlik | — |
+| `/organization` | Organization | Yonetici, Admin |
+| `/photos` | Photo Upload | ST |
+| `/photo-review` | Photo Review | Admin, BM |
+| `/calculate` · `/import` · `/periods` · `/scorecard` · `/prim-config` · `/bricks` · `/panel` · `/activity` | Administration | Admin |
+| `/login` · `/forgot-password` · `/reset-password` · `/change-password` | Authentication | — |
 
 ---
 
-## 7. Güvenlik notları
+## 7. Security notes
 
-- Parolalar **BCrypt** ile hash'lenir; ilk girişte `MustChangePassword` zorunlu.
-- Parola sıfırlama token'ı DB'de **SHA256 hash** olarak, 1 saat geçerli.
-- Brute-force: kullanıcı adı bazlı 15 dakikada 5 hatalı deneme → 15 dakika kilit (`LoginThrottle`, bellek içi).
-- Oturum: `ProtectedSessionStorage` içindeki token + bellek içi `SessionStore` (8 saat idle timeout); DataProtection anahtarları diske kalıcı yazılır.
-- Tüm raw SQL **parametreli**; dinamik parçalar (metrik, plan yüklemi) whitelist `switch` ifadelerinden gelir.
-- Güvenlik header'ları: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. CSP bilinçli olarak eklenmemiş (Blazor Server inline script gereksinimi).
-- Denetim: **28 farklı aksiyon** `AuditLogs`'a yazılır (parola işlemleri, import/rollback, yayın, sıralama, yapılandırma, görev, foto, impersonation başlangıç/bitiş).
+- Passwords are hashed with **BCrypt**; `MustChangePassword` is enforced on first login.
+- Password reset tokens are stored in the DB as a **SHA256 hash**, valid for 1 hour.
+- Brute force: per username, 5 failed attempts within 15 minutes → 15-minute lockout (`LoginThrottle`, in-memory).
+- Session: token in `ProtectedSessionStorage` + in-memory `SessionStore` (8-hour idle timeout); DataProtection keys are persisted to disk.
+- All raw SQL is **parameterized**; dynamic parts (metric, plan predicate) come from whitelisted `switch` expressions.
+- Security headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`. CSP is intentionally not added (Blazor Server inline script requirement).
+- Auditing: **28 different actions** are written to `AuditLogs` (password operations, import/rollback, publishing, ranking, configuration, tasks, photos, impersonation start/end).
 
-> **Denetim boşlukları:** `Calculate` (hesaplama çalıştırma), `Login`/`Logout`/`LoginFailed` ve kullanıcı CRUD aksiyonları audit'e yazılmıyor. `IpAddress` alanı mevcut ama beslenmiyor. Denetim kayıtlarını görüntüleyecek bir arayüz sayfası yok.
+> **Audit gaps:** `Calculate` (running a calculation), `Login`/`Logout`/`LoginFailed` and user CRUD actions are not audited. The `IpAddress` field exists but is not populated. There is no UI page for viewing audit records.
 
-### Test durumu
+### Test status
 
-**111 xUnit testi** (1.272 satır): skor matematiği 41 · import doğrulama 46 · export 9 · güvenlik 8 · görev 7.
+**111 xUnit tests** (1,272 lines): score math 41 · import validation 46 · export 9 · security 8 · tasks 7.
 
-Test edilmeyenler: `CalculateQuarterAsync` orkestrasyonu, import akışlarının kendisi, DB entegrasyonu, UI bileşenleri, **yetki kapsamı** ("ST başkasının primini göremez" kuralı test edilmiyor), yük/performans. CI yok; `coverlet` ekli ama kapsam raporlanmıyor.
+Not tested: `CalculateQuarterAsync` orchestration, the import flows themselves, DB integration, UI components, **authorization scope** (the "an ST cannot see someone else's bonus" rule is not tested), load/performance. No CI; coverlet is included but coverage is not reported.
 
 ---
 
-## 8. Bilinen kısıtlar
+## 8. Known limitations
 
-- **EPPlus `LicenseContext.NonCommercial`** — ticari kullanımda lisans gerekir.
-- **Bellek içi oturum/throttle** — tek sunucu varsayımı; yatay ölçeklemede sticky session veya dağıtık cache gerekir.
-- **Yeniden hesaplama geçmişi silmez ama üzerine yazar** — bir çeyrek yeniden hesaplandığında o çeyreğin `Calculations` satırları silinip yeniden oluşturulur ve yayın durumu sıfırlanır. Yayınlanmış prim tutarının önceki hâli saklanmaz.
-- **Canlı brick haritası** — hedef/gerçekleşen atıfı `UserBricks`'in *o anki* hâline göre yapılır; atama değişince geçmiş çeyreğin sonucu da değişebilir. `CalcFreshnessBanner` bunu uyarır ama otomatik dondurma yoktur.
-- **Şema ikiliği** — EF migration'ları ile `db/*.sql` scriptleri paralel yürür; `Program.cs` içinde kolon eksikliğini kapatan bir "self-heal" bloğu vardır.
+- **EPPlus `LicenseContext.NonCommercial`** — a license is required for commercial use.
+- **In-memory session/throttle** — assumes a single server; horizontal scaling requires sticky sessions or a distributed cache.
+- **Recalculation overwrites rather than keeping history** — when a quarter is recalculated, that quarter's `Calculations` rows are deleted and recreated, and the publish status is reset. Previous versions of a published bonus amount are not kept.
+- **Live brick map** — target/actual attribution is based on the current state of `UserBricks`; when assignments change, past quarters' results can change too. `CalcFreshnessBanner` warns about this, but there is no automatic freezing.
+- **Schema duality** — EF migrations and `db/*.sql` scripts run in parallel; `Program.cs` contains a "self-heal" block that adds missing columns.
 
-Ayrıntılı değerlendirme, mimari analiz ve iyileştirme yol haritası: **`PROJE-RAPORU.md`**
+Detailed evaluation, architecture analysis and improvement roadmap (in Turkish): [`PROJE-RAPORU.md`](PROJE-RAPORU.md)
