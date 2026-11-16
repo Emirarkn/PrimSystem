@@ -238,7 +238,7 @@ else
     private (int? userId, int? regionId) Scope()
     {
         int? userId = Session.IsST ? Session.CurrentUser!.UserId : (int?)null;
-        int? regionId = Session.IsBM ? Session.CurrentUser!.RegionId
+        int? regionId = Session.IsBM ? Session.ScopeRegionId
                       : (Session.CanViewAll ? filterRegionId : (int?)null);
         return (userId, regionId);
     }

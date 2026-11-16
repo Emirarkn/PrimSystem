@@ -742,7 +742,7 @@ else
         if (latestPub == null) return;
         try
         {
-            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            int? regionFilter = Session.ScopeRegionId;
             int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
             publishedSummaries = await CalcSvc.GetResultsAsync(publishedYear, publishedQuarter, regionFilter, publishedOnly: !isDraftView, specificUserId: userFilter);
 

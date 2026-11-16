@@ -105,7 +105,11 @@ namespace PrimSystem.Services
             // BM → yalnız kendi bölgesi; Admin/Yönetici → bölge yoksa tüm aktif ST'ler.
             var stQuery = db.Users.Where(u => u.RoleId == RoleId.ST && u.IsActive && !u.IsDeleted);
             if (assigner.RoleId == RoleId.BM)
-                stQuery = stQuery.Where(u => u.RegionId == assigner.RegionId);
+            {
+                // Bölgesiz BM'de null == null eşleşip bölgesiz tüm ST'lere görev giderdi (ResultScope).
+                var regionId = ResultScope.RegionFilter("BM", assigner.RegionId);
+                stQuery = stQuery.Where(u => u.RegionId == regionId);
+            }
             var targets = await stQuery.Select(u => u.UserId).ToListAsync();
             if (!targets.Any()) return (false, "Bölgenizde aktif ST bulunamadı.", 0);
 

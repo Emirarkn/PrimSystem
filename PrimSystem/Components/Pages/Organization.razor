@@ -658,6 +658,8 @@
         using var db = DbFactory.CreateDbContext();
         formError = "";
         if (string.IsNullOrWhiteSpace(formName)) { formError = "Ad soyad giriniz"; return; }
+        // Bölgesiz BM, bölge kapsamlı sorgularda "filtre yok" gibi davranıp herkesin primini görebilirdi.
+        if (formRoleId == RoleId.BM && formRegionId == 0) { formError = "Bölge Müdürü için bölge seçiniz"; return; }
 
         if (isEditing)
         {

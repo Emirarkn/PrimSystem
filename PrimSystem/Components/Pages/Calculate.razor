@@ -667,7 +667,7 @@
         try
         {
             bool publishedOnly = !Session.CanManage;
-            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            int? regionFilter = Session.ScopeRegionId;
             int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
             summaries = await CalcSvc.GetResultsAsync(selectedYear, selectedQuarter, regionFilter, publishedOnly, userFilter);
             freshness = Session.CanManage ? await CalcSvc.GetCalcFreshnessAsync(selectedYear, selectedQuarter) : null;

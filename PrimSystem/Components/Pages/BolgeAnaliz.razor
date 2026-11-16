@@ -433,7 +433,7 @@ else
     private List<IsoBarChart.Item> topStBars = new();
 
     // Sayfa BM-özel: kapsam daima oturumdaki BM'nin bölgesi.
-    private int? scopeRegionId => Session.CurrentUser?.RegionId;
+    private int? scopeRegionId => Session.ScopeRegionId;
 
     private string RegionName => Session.CurrentUser?.Region?.Name ?? "Bölgem";
 

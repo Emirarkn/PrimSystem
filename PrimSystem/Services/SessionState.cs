@@ -38,6 +38,10 @@ namespace PrimSystem.Services
         public bool CanViewAll => IsAdmin || IsYonetici;
         public bool CanSendNotification => IsAdmin || IsYonetici || IsBM;
 
+        // BM için bölge filtresi; bölgesi yoksa hiçbir satıra eşleşmez. Sayfalar CurrentUser.RegionId'yi
+        // doğrudan geçmemeli: null "tüm bölgeler" anlamına gelir (ResultScope).
+        public int? ScopeRegionId => ResultScope.RegionFilter(RoleName, CurrentUser?.RegionId);
+
         public int? ImpersonatorId { get; private set; }
         public bool IsImpersonating => ImpersonatorId.HasValue;
 

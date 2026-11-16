@@ -522,7 +522,7 @@
 
             <!-- ALT BÖLÜM: Brick & Eczane Performansı -->
             int? bpUserId = Session.IsST ? Session.CurrentUser?.UserId : null;
-            int? bpRegionId = Session.IsBM ? Session.CurrentUser?.RegionId
+            int? bpRegionId = Session.IsBM ? Session.ScopeRegionId
                               : (filterRegionId > 0 ? filterRegionId : (int?)null);
             var bpBrickTitle = Session.IsST ? "Brick Performansım"
                              : Session.IsBM ? "Bölge Brick Performansı" : "Brick Performansı";
@@ -659,7 +659,7 @@
         {
             // Global ayar yalnız başlangıç varsayılanını verir; sonra yerel checkbox seçimi korunur.
             if (!_modeInitialized) { salesOnlyMode = await CalcSvc.GetSalesOnlyModeAsync(); _modeInitialized = true; }
-            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            int? regionFilter = Session.ScopeRegionId;
             // ST yalnız kendi satırını görür (başka ST'lerin verisi sızdırılmaz).
             int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
             bool po = !Session.CanViewAll || publishedOnly;
