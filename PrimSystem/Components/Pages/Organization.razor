@@ -8,6 +8,7 @@
 @inject NavigationManager Nav
 @inject ProtectedSessionStorage SessionStorage
 @inject AuthService AuthSvc
+@inject Microsoft.JSInterop.IJSRuntime JS
 @rendermode InteractiveServer
 
 @if (!Session.IsLoggedIn)
@@ -299,19 +300,47 @@
     <!-- TOPLU SIFIRLAMA ONAY MODALI -->
     @if (showBulkResetConfirm)
     {
-        <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)" @onclick="() => showBulkResetConfirm = false">
+        <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)" @onclick="CloseBulkConfirm">
             <div style="background:#111827;border:1px solid rgba(245,158,11,0.4);border-radius:14px;padding:28px;width:420px" @onclick:stopPropagation>
                 <div style="font-size:18px;margin-bottom:10px">⚠️</div>
                 <h3 style="margin:0 0 10px;font-size:16px;color:#f1f5f9">Tüm Şifreleri Sıfırla</h3>
-                <p style="margin:0 0 20px;font-size:13px;color:#94a3b8">
-                    Tüm aktif kullanıcıların şifresi <strong style="color:#f59e0b">isim bazlı varsayılana</strong> sıfırlanacak ve "Şifre Değiştir" zorunluluğu aktif olacak.<br/><br/>
-                    Örnek: Ahmet Yılmaz → <span style="font-family:monospace;color:#10b981">AhYı12</span>
+                <p style="margin:0 0 14px;font-size:13px;color:#94a3b8">
+                    Sizin dışınızdaki tüm aktif kullanıcılara <strong style="color:#f59e0b">rastgele geçici şifre</strong> atanacak ve ilk girişte şifre değiştirmeleri zorunlu olacak.<br/><br/>
+                    Yeni şifreler <strong style="color:#f1f5f9">yalnızca bir kez</strong> gösterilir (liste + CSV). Pencereyi kapattıktan sonra tekrar görülemez; bunun için tek tek sıfırlamanız gerekir.
                 </p>
+                <label for="bulkConfirm" style="display:block;font-size:11px;color:#94a3b8;margin-bottom:4px">Onaylamak için <strong style="color:#f59e0b;font-family:monospace">SIFIRLA</strong> yazın</label>
+                <input id="bulkConfirm" @bind="bulkConfirmText" @bind:event="oninput" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:18px;padding:8px 10px;background:#0a0f1a;color:#f1f5f9;border:1px solid #1e293b;border-radius:8px;font-size:13px" />
                 <div style="display:flex;gap:8px;justify-content:flex-end">
-                    <button @onclick="() => showBulkResetConfirm = false" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
-                    <button @onclick="DoBulkReset" disabled="@isBulkResetting" style="padding:8px 18px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+                    <button @onclick="CloseBulkConfirm" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="DoBulkReset" disabled="@(isBulkResetting || bulkConfirmText.Trim() != "SIFIRLA")" style="padding:8px 18px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
                         @(isBulkResetting ? "Sıfırlanıyor..." : "Evet, Sıfırla")
                     </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- TOPLU SIFIRLAMA SONUCU: parolalar yalnızca burada, bir kez -->
+    @if (bulkResetResults != null)
+    {
+        <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)">
+            <div role="dialog" aria-labelledby="bulkResultTitle" style="background:#111827;border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:24px;width:560px;max-width:92vw;max-height:86vh;display:flex;flex-direction:column">
+                <h3 id="bulkResultTitle" style="margin:0 0 6px;font-size:16px;color:#f1f5f9">@bulkResetResults.Count kullanıcının şifresi sıfırlandı</h3>
+                <p style="margin:0 0 12px;font-size:12px;color:#f59e0b">Bu liste yalnızca şimdi görünür. CSV'yi indirin ve kullanıcılara güvenli yoldan iletin; dosyayı iş bitince silin.</p>
+                <div style="overflow:auto;border:1px solid #1e293b;border-radius:8px;margin-bottom:14px">
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;color:#e2e8f0">
+                        <thead><tr style="text-align:left;color:#94a3b8;position:sticky;top:0;background:#111827"><th scope="col" style="padding:7px 10px">Ad Soyad</th><th scope="col" style="padding:7px 10px">Kullanıcı Adı</th><th scope="col" style="padding:7px 10px">Geçici Şifre</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in bulkResetResults)
+                            {
+                                <tr style="border-top:1px solid #1e293b"><td style="padding:6px 10px">@c.FullName</td><td style="padding:6px 10px;font-family:monospace">@c.Username</td><td style="padding:6px 10px;font-family:monospace;color:#10b981">@c.TemporaryPassword</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button @onclick="DownloadBulkCsv" style="padding:8px 18px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">CSV indir</button>
+                    <button @onclick="() => bulkResetResults = null" style="padding:8px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Kapat</button>
                 </div>
             </div>
         </div>
@@ -519,6 +548,8 @@
     private bool _sessionChecked = false;
     private bool showBulkResetConfirm = false;
     private bool isBulkResetting = false;
+    private string bulkConfirmText = "";
+    private List<TempCredential>? bulkResetResults;
 
     // Online durum (UserId → LastSeenAt)
     private Dictionary<int, DateTime> lastSeenMap = new();
@@ -755,17 +786,24 @@
         _ = ClearMessage();
     }
 
+    private void CloseBulkConfirm() { showBulkResetConfirm = false; bulkConfirmText = ""; }
+
     private async Task DoBulkReset()
     {
+        if (bulkConfirmText.Trim() != "SIFIRLA") return;
         isBulkResetting = true;
         try
         {
-            var count = await AuthSvc.BulkResetPasswordsAsync(Session.RequireUserId());
-            showBulkResetConfirm = false;
-            message = $"✓ {count} kullanıcının şifresi sıfırlandı.";
-            _ = ClearMessage();
+            bulkResetResults = await AuthSvc.BulkResetPasswordsAsync(Session.RequireUserId());
+            CloseBulkConfirm();
         }
         finally { isBulkResetting = false; }
+    }
+
+    private async Task DownloadBulkCsv()
+    {
+        if (bulkResetResults == null) return;
+        await JS.InvokeVoidAsync("downloadBytes", $"gecici_sifreler_{DateTime.Now:yyyyMMdd_HHmm}.csv", TempCredential.ToCsv(bulkResetResults));
     }
 
     private async Task QuickReset(User u)
