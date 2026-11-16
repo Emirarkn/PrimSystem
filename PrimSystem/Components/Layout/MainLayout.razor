@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject SessionState Session
 @inject ProtectedSessionStorage SessionStorage
+@inject NavigationManager Nav
 
 @* Oturum restore denenene kadar hiçbir sayfa render olmaz — yenilemede
    LoginRequired flash'ını ve üst menü tuşlarının kaybolmasını önler. *@
@@ -43,6 +44,18 @@
     protected override void OnParametersSet()
     {
         errorBoundary?.Recover();
+        EnforcePasswordChange();
+    }
+
+    // Geçici şifreyle girilmişse her sayfa geçişinde şifre değiştirmeye zorla (PasswordChangeGate).
+    private void EnforcePasswordChange()
+    {
+        if (!Session.RestoreAttempted) return;
+        var user = Session.CurrentUser;
+        var target = PasswordChangeGate.RedirectTarget(
+            user != null, user?.MustChangePassword ?? false, Session.IsImpersonating,
+            Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0]);
+        if (target != null) Nav.NavigateTo(target, replace: true);
     }
 
     // Oturum geri yükleme merkezi olarak burada (layout her zaman render olur);
@@ -53,6 +66,7 @@
         {
             _sessionChecked = true;
             await Session.RestoreSessionAsync(SessionStorage);
+            EnforcePasswordChange();
             StateHasChanged();
         }
     }
