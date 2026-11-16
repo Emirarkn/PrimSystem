@@ -782,18 +782,19 @@ namespace PrimSystem.Services
             }
         }
 
-        public async Task UnpublishAsync(int year, string quarter, int stoppedBy = 0)
+        // stoppedBy zorunlu ve varsayılansız: 0 ile çağrılınca yetki kontrolü ve denetim kaydı atlanıyor,
+        // tüm satış ekibinin yayınlanmış primi sessizce geri çekilebiliyordu.
+        public async Task UnpublishAsync(int year, string quarter, int stoppedBy)
         {
             ValidateQuarter(quarter);
-            if (stoppedBy > 0) await EnsureAdminAsync(stoppedBy);
+            await EnsureAdminAsync(stoppedBy);
             using var db = _factory.CreateDbContext();
             var calcs = await db.Calculations
                 .Where(c => c.Year == year && c.Quarter == quarter).ToListAsync();
             foreach (var c in calcs) { c.IsPublished = false; c.PublishedAt = null; c.PublishedBy = null; }
             await db.SaveChangesAsync();
-            if (stoppedBy > 0)
-                await _audit.LogAsync(stoppedBy, "Unpublish", "Calculation", null,
-                    oldValue: $"{year} {quarter} — {calcs.Count} hesaplama yayından kaldırıldı");
+            await _audit.LogAsync(stoppedBy, "Unpublish", "Calculation", null,
+                oldValue: $"{year} {quarter} — {calcs.Count} hesaplama yayından kaldırıldı");
         }
 
         public async Task<(int Year, string Quarter)?> GetLatestPublishedAsync()

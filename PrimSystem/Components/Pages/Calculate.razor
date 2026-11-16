@@ -701,7 +701,7 @@
 
     private async Task DoUnpublish()
     {
-        await CalcSvc.UnpublishAsync(selectedYear, selectedQuarter);
+        await CalcSvc.UnpublishAsync(selectedYear, selectedQuarter, Session.RequireUserId());
         await LoadResults();
     }
 
