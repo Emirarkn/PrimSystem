@@ -64,7 +64,22 @@ using (var scope = app.Services.CreateScope())
         // CanConnectAsync bağlanamazsa exception atmaz, false döner; sonucu yok sayınca başarısız
         // bağlantı için de "başarılı" logu yazılıyor ve gerçek sorun maskeleniyordu.
         if (await db.Database.CanConnectAsync())
+        {
             Log.Information("Veritabanı bağlantısı başarılı");
+            // Soğuk başlangıç ısındırması: EF modeli ve sorgu hattı ilk gerçek sorguda kurulduğu için
+            // yeniden başlatma sonrası ilk sayfa ziyareti (Organizasyon, Raporlar) 1-2,4 sn sürüyordu.
+            // Başarısız olması uygulamayı etkilemez.
+            try
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                await db.Users.AsNoTracking().Include(u => u.Role).Include(u => u.Region).Take(1).ToListAsync();
+                await db.Calculations.AsNoTracking().Include(c => c.User).Take(1).ToListAsync();
+                await db.UserBricks.AsNoTracking().Take(1).ToListAsync();
+                await db.UserSessions.AsNoTracking().Take(1).ToListAsync();
+                Log.Information("EF ısındırma tamam ({Ms} ms)", sw.ElapsedMilliseconds);
+            }
+            catch (Exception warmEx) { Log.Warning(warmEx, "EF ısındırma atlandı"); }
+        }
         else
             Log.Error("Veritabanı bağlantısı kurulamadı (Server={Server} Database={Database}); bağlantı dizesini ve SQL Server'ı kontrol edin", csb.DataSource, csb.InitialCatalog);
 

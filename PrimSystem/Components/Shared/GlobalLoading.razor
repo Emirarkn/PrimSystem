@@ -1,12 +1,10 @@
-@* Bekleme ekranı: animasyonlu PrimSystem logosu (images/waiting.gif).
-   Zemin, GIF'in kendi kremiyle (#faf7f1) aynı tutulur; aksi halde GIF kare olarak ayrışır.
-   Hareket azaltma tercihinde durağan sembol gösterilir. *@
-<div role="status" aria-live="polite" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#faf7f1;font-family:Segoe UI,sans-serif">
-    <div style="text-align:center">
-        <picture>
-            <source media="(prefers-reduced-motion: reduce)" srcset="/images/prim-symbol.png" />
-            <img src="/images/waiting.gif" alt="" width="160" height="160" style="display:block;margin:0 auto 4px;object-fit:contain" />
-        </picture>
-        <p style="color:var(--text-muted);margin:0;font-size:14px;font-weight:600;letter-spacing:.2px">Yükleniyor…</p>
-    </div>
+@* Bekleme ekranı: animasyonlu PrimSystem logosu (images/waiting.png, kullanıcının waiting.gif'inden üretilmiş
+   şeffaf animasyonlu PNG). Zemin şeffaf: sayfanın kendi arka planı görünür, açılış ekranıyla (App.razor)
+   birebir aynı olduğu için Blazor bağlanırken görünüm sıçramaz. Hareket azaltma tercihinde durağan sembol. *@
+<div role="status" aria-live="polite" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Segoe UI,sans-serif">
+    <picture>
+        <source media="(prefers-reduced-motion: reduce)" srcset="/images/prim-symbol.png" />
+        <img src="/images/waiting.png" alt="" width="96" height="77" style="display:block;object-fit:contain" />
+    </picture>
+    <p style="color:var(--text-muted);margin:10px 0 0;font-size:14px;font-weight:600">Yükleniyor…</p>
 </div>
