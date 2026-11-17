@@ -61,8 +61,12 @@ using (var scope = app.Services.CreateScope())
         // Etkin bağlantı hedefini parolasız logla — "yanlış DB" teşhisini kolaylaştırır
         var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(db.Database.GetConnectionString());
         Log.Information("Veritabanı hedefi: Server={Server} Database={Database}", csb.DataSource, csb.InitialCatalog);
-        await db.Database.CanConnectAsync();
-        Log.Information("Veritabanı bağlantısı başarılı");
+        // CanConnectAsync bağlanamazsa exception atmaz, false döner; sonucu yok sayınca başarısız
+        // bağlantı için de "başarılı" logu yazılıyor ve gerçek sorun maskeleniyordu.
+        if (await db.Database.CanConnectAsync())
+            Log.Information("Veritabanı bağlantısı başarılı");
+        else
+            Log.Error("Veritabanı bağlantısı kurulamadı (Server={Server} Database={Database}); bağlantı dizesini ve SQL Server'ı kontrol edin", csb.DataSource, csb.InitialCatalog);
 
         // Şema self-heal: yeni derleme, DB scripti (db/userbrick-share.sql) çalıştırılmadan
         // başlatılırsa UserBricks.SharePercent eksik kalır ve ona bağlı sorgular çöker

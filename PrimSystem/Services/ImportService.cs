@@ -2343,12 +2343,24 @@ namespace PrimSystem.Services
         // ============================================================
         // IMPORT GERİ ALMA
         // ============================================================
+        // Geri alma yalnız ImportedAt damgasıyla silinebilen türlerde mümkün. BrickAtama ve UrunMarka
+        // eşleştirme tablolarını güncelliyor; satırları silmek önceki eşleştirmeyi geri getirmez.
+        private static readonly HashSet<string> RollbackableTypes =
+            new() { "SellOut", "Sipariş", "Hedef", "Ruta", "ZiyaretPlan", "EczanePlani" };
+
+        public static bool SupportsRollback(string? fileType) => fileType != null && RollbackableTypes.Contains(fileType);
+
         public async Task<string> RollbackImportAsync(int logId, int actorUserId)
         {
             await EnsureAdminAsync(actorUserId);
             using var db = _factory.CreateDbContext();
             var log = await db.ImportLogs.FindAsync(logId);
             if (log == null) return "Log bulunamadı";
+
+            // Desteklenmeyen türde eskiden 0 satır silinip log da kaldırılıyordu: veri yerinde kalır,
+            // yükleme kaydı kaybolur, kullanıcı geri alındığını sanırdı.
+            if (!SupportsRollback(log.FileType))
+                return $"'{log.FileType}' içe aktarması geri alınamaz; veriler ve log kaydı korundu.";
 
             // Tam eşleşme: import sırasında tüm satırlar ile ImportLog aynı batchTime'ı taşır.
             // Bu, ±60sn pencereli eski yöntemin yol açtığı çapraz-import silme riskini ortadan kaldırır.

@@ -568,6 +568,9 @@ namespace PrimSystem.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("ValidFrom")
                         .HasColumnType("datetime2");
 
@@ -798,6 +801,63 @@ namespace PrimSystem.Migrations
                     b.ToTable("Periods", (string)null);
                 });
 
+            modelBuilder.Entity("PrimSystem.Data.PharmacyPlan", b =>
+                {
+                    b.Property<long>("PlanId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("PlanId"));
+
+                    b.Property<int>("ActualVisits")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BrickId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GLN")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("KurumName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("PlannedVisits")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Segment")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("SmmId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("PlanId");
+
+                    b.HasIndex("BrickId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Year", "GLN");
+
+                    b.ToTable("PharmacyPlans", (string)null);
+                });
+
             modelBuilder.Entity("PrimSystem.Data.PrimTier", b =>
                 {
                     b.Property<int>("TierId")
@@ -996,6 +1056,9 @@ namespace PrimSystem.Migrations
 
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("ValidFrom")
                         .HasColumnType("datetime2");
@@ -1690,6 +1753,21 @@ namespace PrimSystem.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Publisher");
+                });
+
+            modelBuilder.Entity("PrimSystem.Data.PharmacyPlan", b =>
+                {
+                    b.HasOne("PrimSystem.Data.Brick", "Brick")
+                        .WithMany()
+                        .HasForeignKey("BrickId");
+
+                    b.HasOne("PrimSystem.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("Brick");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("PrimSystem.Data.RolePrimBase", b =>
