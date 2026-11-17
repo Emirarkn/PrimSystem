@@ -1,15 +1,16 @@
-@* Panel/sayfa içi bekleme alanı: animasyonlu logo (images/waiting.gif) + metin.
-   GIF zemini krem (#faf7f1); mix-blend-mode ile kart ve sayfa zeminlerine dikişsiz oturur. *@
-<div role="status" aria-live="polite" style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:@(Padding)px 0;text-align:center">
+@* Panel/sayfa içi bekleme alanı: animasyonlu logo (images/waiting.png, şeffaf) + metin.
+   Zemin şeffaf olduğundan kart, modal veya sayfa zemininde kenar/kare oluşturmaz. *@
+<div role="status" aria-live="polite" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:@(Padding)px 0;text-align:center">
     <picture>
         <source media="(prefers-reduced-motion: reduce)" srcset="/images/prim-symbol.png" />
-        <img src="/images/waiting.gif" alt="" width="@Size" height="@Size" style="display:block;object-fit:contain;mix-blend-mode:multiply" />
+        <img src="/images/waiting.png" alt="" width="@Width" height="@Height" style="display:block;object-fit:contain" />
     </picture>
     <span style="color:var(--text-muted);font-size:13px;font-weight:600">@Text</span>
 </div>
 
 @code {
     [Parameter] public string Text { get; set; } = "Yükleniyor…";
-    [Parameter] public int Size { get; set; } = 96;
+    [Parameter] public int Width { get; set; } = 72;
     [Parameter] public int Padding { get; set; } = 24;
+    private int Height => (int)Math.Round(Width * 95.0 / 118.0);
 }

@@ -18,13 +18,13 @@
 
 <body>
     @* Açılış ekranı: Blazor bağlanana kadar (prerender kapalı olduğu için sayfa boş kalırdı) animasyonlu logo.
-       Uygulama içeriği DOM'a gelince aşağıdaki betik bunu kaldırır. Zemin GIF'in kremiyle aynı. *@
-    <div id="boot-splash" role="status" aria-label="Yükleniyor" style="position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#faf7f1;font-family:Segoe UI,sans-serif">
+       Uygulama içeriği DOM'a gelince aşağıdaki betik bunu kaldırır. Zemin şeffaf: sayfanın kendi arka planı (krem + yeşil dekor) görünür, geçişte renk sıçraması olmaz. *@
+    <div id="boot-splash" role="status" aria-label="Yükleniyor" style="position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Segoe UI,sans-serif">
         <picture>
             <source media="(prefers-reduced-motion: reduce)" srcset="/images/prim-symbol.png" />
-            <img src="/images/waiting.gif" alt="" width="160" height="160" style="display:block;object-fit:contain" />
+            <img src="/images/waiting.png" alt="" width="96" height="77" style="display:block;object-fit:contain" />
         </picture>
-        <p style="margin:4px 0 0;color:#3e5b58;font-size:14px;font-weight:600">Yükleniyor…</p>
+        <p style="margin:10px 0 0;color:#3e5b58;font-size:14px;font-weight:600">Yükleniyor…</p>
     </div>
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <script>
@@ -48,8 +48,9 @@
        özdeş — SHA-384 doğrulandı:
          sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g
        Sürüm yükseltilirken bu hash yeniden hesaplanıp buraya yazılmalı. Aynı origin'den
-       geldiği için integrity/crossorigin özniteliklerine gerek yok. *@
-    <script src="lib/chart.umd.min.js"></script>
+       geldiği için integrity/crossorigin özniteliklerine gerek yok.
+       Artık sayfa açılışında yüklenmez: fileUpload.js ilk grafik çizilirken lib/chart.umd.min.js'i yükler. *@
+
     <script src="fileUpload.js?v=@AssetVersion("fileUpload.js")"></script>
 </body>
 
