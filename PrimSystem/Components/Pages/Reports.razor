@@ -20,7 +20,7 @@
     return;
 }
 
-<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+<div style="min-height:100vh;background:var(--bg-base);font-family:Segoe UI,sans-serif">
 
     <div style="max-width:1280px;margin:0 auto;padding:20px 24px">
 
@@ -28,43 +28,43 @@
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <div>
             <div style="display:flex;align-items:center;gap:10px">
-                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Raporlar</div>
+                <h1 class="p-title" style="font-size:28px;text-transform:none"><Icon Name="bars" Size="28" />Raporlar</h1>
                 @if (salesOnlyMode)
                 {
                     <span title="Yönetici Prim Ayarları'ndan açıldı. Yalnız satış/hedef realizasyon oranı gösteriliyor; diğer KPI'lar ve final skor gizli."
-                          style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)">📈 Realizasyon Modu</span>
+                          style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(42,106,158,0.12);color:var(--info);border:1px solid rgba(42,106,158,0.3)">📈 Realizasyon Modu</span>
                 }
             </div>
-            <div style="font-size:11px;color:#475569">Donem bazli prim analizi</div>
+            <div style="font-size:14px;color:var(--text-dim);margin-top:2px">Dönem bazlı prim analizi</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <!-- Dönem seçici -->
-            <select @bind="selectedYear" @bind:after="LoadData" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+            <select @bind="selectedYear" @bind:after="LoadData" style="padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                 @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--)
                 {
                     <option value="@y">@y</option>
                 }
             </select>
-            <select @bind="selectedQuarter" @bind:after="LoadData" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+            <select @bind="selectedQuarter" @bind:after="LoadData" style="padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                 <option value="Q1">Q1</option>
                 <option value="Q2">Q2</option>
                 <option value="Q3">Q3</option>
                 <option value="Q4">Q4</option>
             </select>
             <button @onclick="RefreshData" disabled="@(isLoading || isRecalculating)" title="Veritabanından güncel sonuçları tekrar oku"
-                    style="padding:6px 12px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    style="padding:6px 12px;background:rgba(42,106,158,0.12);color:var(--info);border:1px solid rgba(42,106,158,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                 @(isLoading ? "⏳ Yükleniyor..." : "🔄 Yenile")
             </button>
             @if (Session.CanManage)
             {
                 <button @onclick="Recalculate" disabled="@(isLoading || isRecalculating)" title="Hedef/satış verisi güncellendiyse seçili dönemin skorlarını yeniden üretir (yayını etkilemez)"
-                        style="padding:6px 12px;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        style="padding:6px 12px;background:rgba(107,79,179,0.12);color:var(--purple-text);border:1px solid rgba(107,79,179,0.35);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                     @(isRecalculating ? "⏳ Hesaplanıyor..." : "⟳ Yeniden Hesapla")
                 </button>
             }
             @if (activeProducts.Any())
             {
-                <select @bind="selectedProductId" @bind:after="LoadData" style="padding:6px 10px;background:#0a0f1a;border:1px solid rgba(139,92,246,0.3);border-radius:7px;color:#f1f5f9;font-size:12px">
+                <select @bind="selectedProductId" @bind:after="LoadData" style="padding:6px 10px;background:var(--bg-base);border:1px solid rgba(109,74,173,0.3);border-radius:7px;color:var(--text);font-size:12px">
                     <option value="">Tüm Ürünler</option>
                     @foreach (var p in activeProducts)
                     {
@@ -75,7 +75,7 @@
             @if (Session.CanManage)
             {
                 <label title="Yalnız satış/hedef realizasyon oranını göster; diğer KPI'lar ve final skor gizlenir. Global ayardır — ST ve Bölge Müdürü panolarına da uygulanır."
-                       style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:@(salesOnlyMode ? "rgba(59,130,246,0.18)" : "rgba(59,130,246,0.08)");color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                       style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:@(salesOnlyMode ? "rgba(42,106,158,0.18)" : "rgba(42,106,158,0.08)");color:var(--info);border:1px solid rgba(42,106,158,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                     <input type="checkbox" @bind="salesOnlyMode" @bind:after="OnRealizationToggled" style="cursor:pointer" />
                     📈 Realizasyon
                 </label>
@@ -83,14 +83,14 @@
             @if (Session.CanViewAll)
             {
                 <button @onclick="TogglePublishedOnly"
-                        style="padding:6px 12px;background:@(publishedOnly ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(publishedOnly ? "#10b981" : "#f59e0b");border:1px solid @(publishedOnly ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)");border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        style="padding:6px 12px;background:@(publishedOnly ? "rgba(10,107,102,0.12)" : "rgba(217,148,40,0.12)");color:@(publishedOnly ? "var(--accent)" : "var(--warning)");border:1px solid @(publishedOnly ? "rgba(10,107,102,0.3)" : "rgba(217,148,40,0.3)");border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                     @(publishedOnly ? "✓ Yalnızca Yayınlanan" : "Tüm Hesaplamalar")
                 </button>
             }
             @if (summaries.Any())
             {
                 <button @onclick="DownloadExcel" disabled="@isExporting"
-                        style="padding:6px 12px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                        style="padding:6px 12px;background:rgba(10,107,102,0.12);color:var(--accent);border:1px solid rgba(10,107,102,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                     @(isExporting ? "⏳ Hazırlanıyor..." : "⬇ Excel")
                 </button>
             }
@@ -104,11 +104,11 @@
                 {
                     <StatusBadge Variant="warning" Icon="⏸" Label="@($"Beklemede · {pubAt?.ToLocalTime():dd.MM.yyyy HH:mm}")" />
                     <button @onclick="DoResume"
-                            style="padding:5px 11px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(10,107,102,0.12);color:var(--accent);border:1px solid rgba(10,107,102,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ▶ Devam Et
                     </button>
                     <button @onclick="DoUnpublish"
-                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(181,65,58,0.1);color:var(--danger);border:1px solid rgba(181,65,58,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ⏹ Durdur
                     </button>
                 }
@@ -116,18 +116,18 @@
                 {
                     <StatusBadge Variant="success" Icon="🟢" Label="@($"Yayında · {pubAt?.ToLocalTime():dd.MM.yyyy HH:mm}")" />
                     <button @onclick="DoPause"
-                            style="padding:5px 11px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(217,148,40,0.12);color:var(--warning);border:1px solid rgba(217,148,40,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ⏸ Beklet
                     </button>
                     <button @onclick="DoUnpublish"
-                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(181,65,58,0.1);color:var(--danger);border:1px solid rgba(181,65,58,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ⏹ Durdur
                     </button>
                 }
                 else
                 {
                     <button @onclick="DoPublish"
-                            style="padding:5px 11px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(10,107,102,0.12);color:var(--accent);border:1px solid rgba(10,107,102,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         📤 Yayınla
                     </button>
                 }
@@ -138,11 +138,11 @@
                 {
                     <StatusBadge Variant="warning" Icon="⏸" Label="@($"Sıralama Beklemede{(activeLeaderboardProduct != null ? $" ({activeLeaderboardProduct})" : "")}")" />
                     <button @onclick="ResumeOrderLeaderboard"
-                            style="padding:5px 11px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(10,107,102,0.12);color:var(--accent);border:1px solid rgba(10,107,102,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ▶ Devam Et
                     </button>
                     <button @onclick="StopOrderLeaderboard"
-                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(181,65,58,0.1);color:var(--danger);border:1px solid rgba(181,65,58,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ⏹ Durdur
                     </button>
                 }
@@ -150,11 +150,11 @@
                 {
                     <StatusBadge Variant="success" Icon="📊" Label="@($"Sıralama Yayında{(activeLeaderboardProduct != null ? $" ({activeLeaderboardProduct})" : "")}")" />
                     <button @onclick="PauseOrderLeaderboard"
-                            style="padding:5px 11px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(217,148,40,0.12);color:var(--warning);border:1px solid rgba(217,148,40,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ⏸ Beklet
                     </button>
                     <button @onclick="StopOrderLeaderboard"
-                            style="padding:5px 11px;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(181,65,58,0.1);color:var(--danger);border:1px solid rgba(181,65,58,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         ⏹ Durdur
                     </button>
                 }
@@ -162,7 +162,7 @@
                 {
                     var prodName = selectedProductId.HasValue ? activeProducts.FirstOrDefault(p => p.ProductId == selectedProductId)?.Name : null;
                     <button @onclick="PublishOrderLeaderboard"
-                            style="padding:5px 11px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 11px;background:rgba(217,148,40,0.12);color:var(--warning);border:1px solid rgba(217,148,40,0.3);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
                         📊 @(prodName != null ? $"{prodName} Sıralaması Aktar" : "Tüm Ürün Sıralaması Aktar")
                     </button>
                 }
@@ -174,78 +174,61 @@
 
         @if (!string.IsNullOrEmpty(authMsg))
         {
-            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#ef4444;font-size:13px;display:flex;justify-content:space-between;align-items:center">
+            <div style="background:rgba(181,65,58,0.1);border:1px solid rgba(181,65,58,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:var(--danger);font-size:13px;display:flex;justify-content:space-between;align-items:center">
                 <span>⚠ @authMsg</span>
-                <button @onclick="() => { authMsg = null; StateHasChanged(); }" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:14px">✕</button>
+                <button @onclick="() => { authMsg = null; StateHasChanged(); }" style="background:transparent;border:none;color:var(--danger);cursor:pointer;font-size:14px">✕</button>
             </div>
         }
         @if (!string.IsNullOrEmpty(modeMsg))
         {
-            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px;display:flex;justify-content:space-between;align-items:center">
+            <div style="background:rgba(10,107,102,0.1);border:1px solid rgba(10,107,102,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:var(--accent);font-size:13px;display:flex;justify-content:space-between;align-items:center">
                 <span>✓ @modeMsg</span>
-                <button @onclick="() => { modeMsg = null; StateHasChanged(); }" style="background:transparent;border:none;color:#10b981;cursor:pointer;font-size:14px">✕</button>
+                <button @onclick="() => { modeMsg = null; StateHasChanged(); }" style="background:transparent;border:none;color:var(--accent);cursor:pointer;font-size:14px">✕</button>
             </div>
         }
 
         @if (isLoading)
         {
-            <div style="text-align:center;padding:60px;color:#64748b;font-size:13px">Veriler yükleniyor...</div>
+            <div style="text-align:center;padding:60px;color:var(--text-faint);font-size:13px">Veriler yükleniyor...</div>
         }
         else if (!summaries.Any())
         {
             <div style="text-align:center;padding:60px">
                 <div style="font-size:32px;margin-bottom:12px">📊</div>
-                <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Veri Bulunamadı</div>
-                <div style="font-size:12px;color:#64748b">@selectedYear @selectedQuarter için @(publishedOnly ? "yayınlanmış " : "")hesaplama kaydı yok</div>
+                <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Veri Bulunamadı</div>
+                <div style="font-size:12px;color:var(--text-faint)">@selectedYear @selectedQuarter için @(publishedOnly ? "yayınlanmış " : "")hesaplama kaydı yok</div>
             </div>
         }
         else
         {
             <!-- ÖZET KARTLAR -->
-            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">
-                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
-                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">TOPLAM ST</div>
-                    <div style="font-size:26px;font-weight:700;color:#f1f5f9;font-family:monospace">@totalCount</div>
-                </div>
-                <div style="background:#111827;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:14px">
-                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">GEÇEN</div>
-                    <div style="font-size:26px;font-weight:700;color:#10b981;font-family:monospace">@passedCount</div>
-                    <div style="font-size:10px;color:#10b981;margin-top:2px">%@(passRate.ToString("F0"))</div>
-                </div>
-                <div style="background:#111827;border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:14px">
-                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">KALAN</div>
-                    <div style="font-size:26px;font-weight:700;color:#ef4444;font-family:monospace">@failedCount</div>
-                    <div style="font-size:10px;color:#ef4444;margin-top:2px">%@((100 - passRate).ToString("F0"))</div>
-                </div>
-                <div style="background:#111827;border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px">
-                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">PRİM DIŞI</div>
-                    <div style="font-size:26px;font-weight:700;color:#f59e0b;font-family:monospace">@ineligibleCount</div>
-                    <div style="font-size:10px;color:#64748b;margin-top:2px">yeni başlayan</div>
-                </div>
-                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:4px">
-                    <div style="font-size:10px;color:#64748b;font-weight:600">ORT. SKOR</div>
-                    <ScoreGauge Value="@(avgScore / 100)" Size="74" ShowStatus="false" />
-                </div>
-                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px">
-                    <div style="font-size:10px;color:#64748b;margin-bottom:4px;font-weight:600">EN YÜKSEK</div>
-                    <div style="font-size:26px;font-weight:700;color:#a855f7;font-family:monospace">%@(maxScore.ToString("F1"))</div>
-                </div>
+            <div class="p-grid6" style="margin-bottom:18px">
+                <StatCard Compact="true" IconName="users" Label="Toplam ST" Value="@totalCount.ToString()" Sub="@($"{selectedYear} {selectedQuarter}")" />
+                <StatCard Compact="true" Tone="mint" IconName="check" Label="Geçen" Value="@passedCount.ToString()" Sub="@($"%{passRate:F0}")"
+                          Percent="(double)passRate" RingSize="54" Stroke="8" RingColor="var(--brand)" />
+                <StatCard Compact="true" Tone="rose" IconName="x" Label="Kalan" Value="@failedCount.ToString()" Sub="@($"%{(100 - passRate):F0}")"
+                          Percent="(double)(100 - passRate)" RingSize="54" Stroke="8" RingColor="var(--danger)" RingTrack="rgba(181,65,58,.15)" />
+                <StatCard Compact="true" Tone="amber" IconName="warning" Label="Prim Dışı" Value="@ineligibleCount.ToString()" Sub="yeni başlayan" />
+                <StatCard Compact="true" IconName="star" Label="Ort. Skor" Value="@($"%{avgScore:F1}")" Sub=""
+                          Percent="(double)Math.Min(avgScore, 100)" RingSize="54" Stroke="8" RingColor="#c98a1c" RingTrack="rgba(185,119,14,.16)" />
+                <StatCard Compact="true" IconName="trophy" Label="En Yüksek" Value="@($"%{maxScore:F1}")" Sub=""
+                          Percent="(double)Math.Min(maxScore, 100)" RingSize="54" Stroke="8" RingColor="var(--violet)" RingTrack="rgba(109,74,173,.16)" />
             </div>
 
             <!-- BÖLGE TABLOSU (ST'ye gösterilmez — yalnız kendi performansı) -->
             @if (regionRows.Any() && !Session.IsST)
             {
-                <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:16px">
-                    <div style="padding:12px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px">
-                        <span style="font-size:13px;font-weight:700;color:#f1f5f9">Bölge Bazlı Özet</span>
-                        <span style="font-size:11px;color:#64748b">@selectedYear @selectedQuarter</span>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+                        <span style="font-size:13px;font-weight:700;color:var(--text)">Bölge Bazlı Özet</span>
+                        <span style="font-size:11px;color:var(--text-faint)">@selectedYear @selectedQuarter</span>
                     </div>
                     <table style="width:100%;border-collapse:collapse;font-size:12px">
                         <thead>
-                            <tr style="background:#0d1424">
+                            <tr style="background:var(--bg-elevated)">
                                 @foreach (var h in new[] { "BÖLGE", "ST SAYISI", "GEÇEN", "KALAN", "PRİM DIŞI", "GEÇİŞ %", "ORT. SKOR", "EN İYİ" })
                                 {
-                                    <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                    <th style="padding:9px 12px;text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">@h</th>
                                 }
                             </tr>
                         </thead>
@@ -253,21 +236,21 @@
                             @foreach (var r in regionRows.OrderByDescending(x => x.PassRate))
                             {
                                 <tr style="border-bottom:1px solid #1e293b11">
-                                    <td style="padding:9px 12px;color:#f1f5f9;font-weight:600">@r.RegionName</td>
-                                    <td style="padding:9px 12px;color:#94a3b8;font-family:monospace">@r.Total</td>
-                                    <td style="padding:9px 12px;color:#10b981;font-family:monospace;font-weight:600">@r.Passed</td>
-                                    <td style="padding:9px 12px;color:#ef4444;font-family:monospace">@r.Failed</td>
-                                    <td style="padding:9px 12px;color:#f59e0b;font-family:monospace">@r.Ineligible</td>
+                                    <td style="padding:9px 12px;color:var(--text);font-weight:600">@r.RegionName</td>
+                                    <td style="padding:9px 12px;color:var(--text-dim);font-family:monospace">@r.Total</td>
+                                    <td style="padding:9px 12px;color:var(--accent);font-family:monospace;font-weight:600">@r.Passed</td>
+                                    <td style="padding:9px 12px;color:var(--danger);font-family:monospace">@r.Failed</td>
+                                    <td style="padding:9px 12px;color:var(--warning);font-family:monospace">@r.Ineligible</td>
                                     <td style="padding:9px 12px">
                                         <div style="display:flex;align-items:center;gap:6px">
-                                            <div style="width:60px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
-                                                <div style="height:100%;width:@(r.PassRate.ToString("F0"))%;background:@(r.PassRate >= 70 ? "#10b981" : r.PassRate >= 50 ? "#f59e0b" : "#ef4444");border-radius:2px"></div>
+                                            <div style="width:60px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                                                <div style="height:100%;width:@(r.PassRate.ToString("F0"))%;background:@(r.PassRate >= 70 ? "var(--accent)" : r.PassRate >= 50 ? "var(--warning)" : "var(--danger)");border-radius:2px"></div>
                                             </div>
-                                            <span style="font-weight:700;color:@(r.PassRate >= 70 ? "#10b981" : r.PassRate >= 50 ? "#f59e0b" : "#ef4444")">%@(r.PassRate.ToString("F0"))</span>
+                                            <span style="font-weight:700;color:@(r.PassRate >= 70 ? "var(--accent)" : r.PassRate >= 50 ? "var(--warning)" : "var(--danger)")">%@(r.PassRate.ToString("F0"))</span>
                                         </div>
                                     </td>
-                                    <td style="padding:9px 12px;color:#3b82f6;font-family:monospace;font-weight:600">%@(r.AvgScore.ToString("F1"))</td>
-                                    <td style="padding:9px 12px;color:#64748b;font-size:11px">@r.TopPerformer</td>
+                                    <td style="padding:9px 12px;color:var(--info);font-family:monospace;font-weight:600">%@(r.AvgScore.ToString("F1"))</td>
+                                    <td style="padding:9px 12px;color:var(--text-faint);font-size:11px">@r.TopPerformer</td>
                                 </tr>
                             }
                         </tbody>
@@ -276,15 +259,15 @@
             }
 
             <!-- ST SIRALAMA TABLOSU -->
-            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden;margin-bottom:16px">
-                <div style="padding:12px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">
+                <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
                     <div style="display:flex;align-items:center;gap:8px">
-                        <span style="font-size:13px;font-weight:700;color:#f1f5f9">ST Sıralaması</span>
-                        <span style="font-size:11px;color:#64748b">@summaries.Count kişi</span>
+                        <span style="font-size:13px;font-weight:700;color:var(--text)">ST Sıralaması</span>
+                        <span style="font-size:11px;color:var(--text-faint)">@summaries.Count kişi</span>
                     </div>
                     @if (Session.CanManage)
                     {
-                        <select @bind="filterRegionId" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;color:#f1f5f9;font-size:11px">
+                        <select @bind="filterRegionId" style="padding:5px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px">
                             <option value="0">Tüm Bölgeler</option>
                             @foreach (var r in regionRows)
                             {
@@ -295,28 +278,28 @@
                 </div>
                 <table style="width:100%;border-collapse:collapse;font-size:12px">
                     <thead>
-                        <tr style="background:#0d1424">
-                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b;width:32px">#</th>
-                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">İSİM</th>
-                            <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">BÖLGE</th>
-                            <th style="padding:9px 12px;text-align:center;color:#a78bfa;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">TOPLAM HEDEF</th>
-                            <th style="padding:9px 12px;text-align:center;color:#a78bfa;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">TOPLAM GERÇ.</th>
-                            <th style="padding:9px 12px;text-align:center;color:#a78bfa;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">GENEL %</th>
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@(salesOnlyMode ? "REALİZASYON %" : "SATIŞ %")</th>
+                        <tr style="background:var(--bg-elevated)">
+                            <th style="padding:9px 12px;text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border);width:32px">#</th>
+                            <th style="padding:9px 12px;text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">İSİM</th>
+                            <th style="padding:9px 12px;text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">BÖLGE</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--violet);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">TOPLAM HEDEF</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--violet);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">TOPLAM GERÇ.</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--violet);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">GENEL %</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">@(salesOnlyMode ? "REALİZASYON %" : "SATIŞ %")</th>
                             @if (!salesOnlyMode)
                             {
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">RUTA %</th>
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">DAĞITIM %</th>
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">STRİKE %</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">RUTA %</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">DAĞITIM %</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">STRİKE %</th>
                             @if (orderShared)
                             {
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SİP. KUTU</th>
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SİP. TL</th>
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">SİP. KURUM</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">SİP. KUTU</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">SİP. TL</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">SİP. KURUM</th>
                             }
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">FİNAL %</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">FİNAL %</th>
                             }
-                            <th style="padding:9px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">DURUM</th>
+                            <th style="padding:9px 12px;text-align:center;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">DURUM</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -327,20 +310,20 @@
                             var dipHedef = s.Details.Sum(d => d.TargetQty);
                             var dipGerc = s.Details.Sum(d => d.ActualQty);
                             var dipOran = dipHedef > 0 ? dipGerc / dipHedef * 100 : 0m;
-                            var dipColor = dipOran >= 100 ? "#10b981" : dipOran >= 85 ? "#f59e0b" : "#ef4444";
+                            var dipColor = dipOran >= 100 ? "var(--accent)" : dipOran >= 85 ? "var(--warning)" : "var(--danger)";
                             var score = (salesOnlyMode ? s.Calc.TotalScore : (s.Calc.FinalScore ?? s.Calc.TotalScore)) * 100;
                             var passed = s.Calc.IsEligible && (salesOnlyMode ? s.Calc.TotalScore >= 0.85m : s.Calc.PassedGate);
-                            var statusColor = !s.Calc.IsEligible ? "#f59e0b" : passed ? "#10b981" : "#ef4444";
+                            var statusColor = !s.Calc.IsEligible ? "var(--warning)" : passed ? "var(--accent)" : "var(--danger)";
                             var statusLabel = !s.Calc.IsEligible ? "Prim Dışı" : passed ? "GEÇTİ" : "KALDI";
-                            var medalColor = rank switch { 1 => "#f59e0b", 2 => "#94a3b8", 3 => "#cd7c3b", _ => "#475569" };
+                            var medalColor = rank switch { 1 => "var(--warning)", 2 => "var(--text-dim)", 3 => "#cd7c3b", _ => "var(--text-ghost)" };
                             <tr style="border-bottom:1px solid #1e293b0a">
                                 <td style="padding:8px 12px;color:@medalColor;font-weight:700;font-size:@(rank <= 3 ? "15px" : "11px");text-align:center">
                                     @(rank switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => rank.ToString() })
                                 </td>
-                                <td style="padding:8px 12px;color:#f1f5f9;font-weight:500">@s.Calc.User?.FullName</td>
-                                <td style="padding:8px 12px;color:#64748b;font-size:11px">@(s.Calc.User?.Region?.Name ?? "—")</td>
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:#94a3b8">@(dipHedef > 0 ? dipHedef.ToString("N0") : "—")</td>
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:#cbd5e1">@(dipGerc != 0 ? dipGerc.ToString("N0") : "—")</td>
+                                <td style="padding:8px 12px;color:var(--text);font-weight:500">@s.Calc.User?.FullName</td>
+                                <td style="padding:8px 12px;color:var(--text-faint);font-size:11px">@(s.Calc.User?.Region?.Name ?? "—")</td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:var(--text-dim)">@(dipHedef > 0 ? dipHedef.ToString("N0") : "—")</td>
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:var(--text-muted)">@(dipGerc != 0 ? dipGerc.ToString("N0") : "—")</td>
                                 <td style="padding:8px 12px;text-align:center;font-family:monospace;font-weight:700;color:@dipColor">@(dipHedef > 0 ? $"%{dipOran:F1}" : "—")</td>
                                 @{
                                     decimal displaySalesRate;
@@ -354,28 +337,28 @@
                                         displaySalesRate = s.Calc.TotalScore * 100;
                                     }
                                 }
-                                <td style="padding:8px 12px;text-align:center;color:@(displaySalesRate > 0 ? "#94a3b8" : "#475569");font-family:monospace">@(displaySalesRate > 0 ? $"%{displaySalesRate:F1}" : "—")</td>
+                                <td style="padding:8px 12px;text-align:center;color:@(displaySalesRate > 0 ? "var(--text-dim)" : "var(--text-ghost)");font-family:monospace">@(displaySalesRate > 0 ? $"%{displaySalesRate:F1}" : "—")</td>
                                 @if (!salesOnlyMode)
                                 {
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.RutaScore.HasValue ? "#f1f5f9" : "#475569")">
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.RutaScore.HasValue ? "var(--text)" : "var(--text-ghost)")">
                                     @(s.Calc.RutaScore.HasValue ? $"%{(s.Calc.RutaScore.Value * 100).ToString("F1")}" : "—")
                                 </td>
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.DistScore.HasValue ? "#f1f5f9" : "#475569")">
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.DistScore.HasValue ? "var(--text)" : "var(--text-ghost)")">
                                     @(s.Calc.DistScore.HasValue ? $"%{(s.Calc.DistScore.Value * 100).ToString("F1")}" : "—")
                                 </td>
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.OrderScore.HasValue ? "#f1f5f9" : "#475569")">
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(s.Calc.OrderScore.HasValue ? "var(--text)" : "var(--text-ghost)")">
                                     @(s.Calc.OrderScore.HasValue ? $"%{(s.Calc.OrderScore.Value * 100).ToString("F1")}" : "—")
                                 </td>
                                 @if (orderShared)
                                 {
                                 var ord = s.Calc.User != null && orderData.TryGetValue(s.Calc.User.UserId, out var od) ? od : default;
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.BoxQty > 0 ? "#06b6d4" : "#475569")">
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.BoxQty > 0 ? "var(--cyan)" : "var(--text-ghost)")">
                                     @(ord.BoxQty > 0 ? ord.BoxQty.ToString("N0") : "—")
                                 </td>
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.AmountTL > 0 ? "#10b981" : "#475569")">
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.AmountTL > 0 ? "var(--accent)" : "var(--text-ghost)")">
                                     @(ord.AmountTL > 0 ? ord.AmountTL.ToString("N0") : "—")
                                 </td>
-                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.InstCount > 0 ? "#a78bfa" : "#475569")">
+                                <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ord.InstCount > 0 ? "var(--violet)" : "var(--text-ghost)")">
                                     @(ord.InstCount > 0 ? ord.InstCount.ToString("N0") : "—")
                                 </td>
                                 }
@@ -392,13 +375,13 @@
                             var dipTotHedef = sortedSummaries.Sum(s => s.Details.Sum(d => d.TargetQty));
                             var dipTotGerc = sortedSummaries.Sum(s => s.Details.Sum(d => d.ActualQty));
                             var dipTotOran = dipTotHedef > 0 ? dipTotGerc / dipTotHedef * 100 : 0m;
-                            var dipTotColor = dipTotOran >= 100 ? "#10b981" : dipTotOran >= 85 ? "#f59e0b" : "#ef4444";
+                            var dipTotColor = dipTotOran >= 100 ? "var(--accent)" : dipTotOran >= 85 ? "var(--warning)" : "var(--danger)";
                             var restCols = 1 + (salesOnlyMode ? 0 : (3 + (orderShared ? 3 : 0) + 1)) + 1;
                         }
-                        <tr style="background:#0d1424;border-top:2px solid #334155">
-                            <td colspan="3" style="padding:10px 12px;color:#f1f5f9;font-weight:800;font-size:12px">DİP TOPLAM (by ST)</td>
-                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:#a78bfa">@dipTotHedef.ToString("N0")</td>
-                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:#cbd5e1">@dipTotGerc.ToString("N0")</td>
+                        <tr style="background:var(--bg-elevated);border-top:2px solid var(--border-strong)">
+                            <td colspan="3" style="padding:10px 12px;color:var(--text);font-weight:800;font-size:12px">DİP TOPLAM (by ST)</td>
+                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:var(--violet)">@dipTotHedef.ToString("N0")</td>
+                            <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:var(--text-muted)">@dipTotGerc.ToString("N0")</td>
                             <td style="padding:10px 12px;text-align:center;font-family:monospace;font-weight:800;color:@dipTotColor">%@dipTotOran.ToString("F1")</td>
                             <td colspan="@restCols"></td>
                         </tr>
@@ -415,21 +398,21 @@
                     .Where(x => x.Detail != null)
                     .OrderByDescending(x => x.Detail!.Rate)
                     .ToList();
-                <div style="background:#111827;border:1px solid rgba(139,92,246,0.3);border-radius:12px;overflow:hidden">
-                    <div style="padding:12px 16px;border-bottom:1px solid #1e293b">
-                        <span style="font-size:13px;font-weight:700;color:#a78bfa">@(selProduct?.Name ?? "Ürün") — ST Bazlı Detay</span>
-                        <span style="font-size:11px;color:#64748b;margin-left:8px">@stProductDetails.Count ST</span>
+                <div style="background:var(--bg-card);border:1px solid rgba(109,74,173,0.3);border-radius:12px;overflow:hidden">
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+                        <span style="font-size:13px;font-weight:700;color:var(--violet)">@(selProduct?.Name ?? "Ürün") — ST Bazlı Detay</span>
+                        <span style="font-size:11px;color:var(--text-faint);margin-left:8px">@stProductDetails.Count ST</span>
                     </div>
                     @if (stProductDetails.Any())
                     {
                         <table style="width:100%;border-collapse:collapse;font-size:12px">
                             <thead>
-                                <tr style="background:#0d1424">
+                                <tr style="background:var(--bg-elevated)">
                                     @foreach (var h in (orderShared
                                         ? new[] { "#", "İSİM", "BÖLGE", "HEDEF", "GERÇEKLEŞEN", "ORAN", "SİP. KUTU", "SİP. TL" }
                                         : new[] { "#", "İSİM", "BÖLGE", "HEDEF", "GERÇEKLEŞEN", "ORAN" }))
                                     {
-                                        <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                        <th style="padding:9px 12px;text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">@h</th>
                                     }
                                 </tr>
                             </thead>
@@ -440,18 +423,18 @@
                                     pRank++;
                                     var d = x.Detail!;
                                     var rateVal = d.Rate * 100;
-                                    var rateColor = d.Rate >= 1.0m ? "#10b981" : d.Rate >= 0.85m ? "#f59e0b" : "#ef4444";
+                                    var rateColor = d.Rate >= 1.0m ? "var(--accent)" : d.Rate >= 0.85m ? "var(--warning)" : "var(--danger)";
                                     var uid = x.Calc.User?.UserId ?? 0;
                                     var ordP = orderShared && orderData.TryGetValue(uid, out var opd) ? opd : default;
                                     <tr style="border-bottom:1px solid #1e293b0a">
-                                        <td style="padding:8px 12px;color:#475569;font-weight:700;font-size:11px;text-align:center">@pRank</td>
-                                        <td style="padding:8px 12px;color:#f1f5f9;font-weight:500">@x.Calc.User?.FullName</td>
-                                        <td style="padding:8px 12px;color:#64748b;font-size:11px">@(x.Calc.User?.Region?.Name ?? "—")</td>
-                                        <td style="padding:8px 12px;color:#64748b;font-family:monospace">@(d.TargetQty > 0 ? d.TargetQty.ToString("F0") : "—")</td>
-                                        <td style="padding:8px 12px;color:#94a3b8;font-family:monospace">@(d.ActualQty > 0 ? d.ActualQty.ToString("F0") : "—")</td>
+                                        <td style="padding:8px 12px;color:var(--text-ghost);font-weight:700;font-size:11px;text-align:center">@pRank</td>
+                                        <td style="padding:8px 12px;color:var(--text);font-weight:500">@x.Calc.User?.FullName</td>
+                                        <td style="padding:8px 12px;color:var(--text-faint);font-size:11px">@(x.Calc.User?.Region?.Name ?? "—")</td>
+                                        <td style="padding:8px 12px;color:var(--text-faint);font-family:monospace">@(d.TargetQty > 0 ? d.TargetQty.ToString("F0") : "—")</td>
+                                        <td style="padding:8px 12px;color:var(--text-dim);font-family:monospace">@(d.ActualQty > 0 ? d.ActualQty.ToString("F0") : "—")</td>
                                         <td style="padding:8px 12px">
                                             <div style="display:flex;align-items:center;gap:6px">
-                                                <div style="width:50px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+                                                <div style="width:50px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
                                                     <div style="height:100%;width:@(Math.Min(rateVal, 100).ToString("F0"))%;background:@rateColor;border-radius:2px"></div>
                                                 </div>
                                                 <span style="font-weight:700;color:@rateColor;font-family:monospace">%@(rateVal.ToString("F1")) @(d.IsCapped ? "↑" : "")</span>
@@ -459,10 +442,10 @@
                                         </td>
                                         @if (orderShared)
                                         {
-                                        <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ordP.BoxQty > 0 ? "#06b6d4" : "#475569")">
+                                        <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ordP.BoxQty > 0 ? "var(--cyan)" : "var(--text-ghost)")">
                                             @(ordP.BoxQty > 0 ? ordP.BoxQty.ToString("N0") : "—")
                                         </td>
-                                        <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ordP.AmountTL > 0 ? "#10b981" : "#475569")">
+                                        <td style="padding:8px 12px;text-align:center;font-family:monospace;color:@(ordP.AmountTL > 0 ? "var(--accent)" : "var(--text-ghost)")">
                                             @(ordP.AmountTL > 0 ? ordP.AmountTL.ToString("N0") : "—")
                                         </td>
                                         }
@@ -473,46 +456,46 @@
                     }
                     else
                     {
-                        <div style="padding:24px;text-align:center;color:#64748b;font-size:13px">Bu ürün için hesaplama detayı bulunamadı</div>
+                        <div style="padding:24px;text-align:center;color:var(--text-faint);font-size:13px">Bu ürün için hesaplama detayı bulunamadı</div>
                     }
                 </div>
             }
             else if (productRows.Any())
             {
-                <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
-                    <div style="padding:12px 16px;border-bottom:1px solid #1e293b">
-                        <span style="font-size:13px;font-weight:700;color:#f1f5f9">Ürün Bazlı Performans</span>
-                        <span style="font-size:11px;color:#64748b;margin-left:8px">ortalama satış oranı</span>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+                        <span style="font-size:13px;font-weight:700;color:var(--text)">Ürün Bazlı Performans</span>
+                        <span style="font-size:11px;color:var(--text-faint);margin-left:8px">ortalama satış oranı</span>
                     </div>
                     <table style="width:100%;border-collapse:collapse;font-size:12px">
                         <thead>
-                            <tr style="background:#0d1424">
+                            <tr style="background:var(--bg-elevated)">
                                 @foreach (var h in new[] { "ÜRÜN", "GRUP", "ORT. HEDEF", "ORT. GERÇEKLEŞEN", "ORT. ORAN", "HEDEF AŞAN ST" })
                                 {
-                                    <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                    <th style="padding:9px 12px;text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;border-bottom:1px solid var(--border)">@h</th>
                                 }
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var p in productRows.OrderByDescending(x => x.AvgRate))
                             {
-                                var rateColor = p.AvgRate >= 1.0m ? "#10b981" : p.AvgRate >= 0.85m ? "#f59e0b" : "#ef4444";
+                                var rateColor = p.AvgRate >= 1.0m ? "var(--accent)" : p.AvgRate >= 0.85m ? "var(--warning)" : "var(--danger)";
                                 <tr style="border-bottom:1px solid #1e293b0a">
-                                    <td style="padding:9px 12px;color:#f1f5f9;font-weight:500">@p.ProductName</td>
+                                    <td style="padding:9px 12px;color:var(--text);font-weight:500">@p.ProductName</td>
                                     <td style="padding:9px 12px">
-                                        <span style="padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;background:@(p.ProductGroup == "OTC" ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(p.ProductGroup == "OTC" ? "#10b981" : "#f59e0b")">@p.ProductGroup</span>
+                                        <span style="padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;background:@(p.ProductGroup == "OTC" ? "rgba(10,107,102,0.12)" : "rgba(217,148,40,0.12)");color:@(p.ProductGroup == "OTC" ? "var(--accent)" : "var(--warning)")">@p.ProductGroup</span>
                                     </td>
-                                    <td style="padding:9px 12px;color:#64748b;font-family:monospace">@p.AvgTarget.ToString("N0")</td>
-                                    <td style="padding:9px 12px;color:#94a3b8;font-family:monospace">@p.AvgActual.ToString("N0")</td>
+                                    <td style="padding:9px 12px;color:var(--text-faint);font-family:monospace">@p.AvgTarget.ToString("N0")</td>
+                                    <td style="padding:9px 12px;color:var(--text-dim);font-family:monospace">@p.AvgActual.ToString("N0")</td>
                                     <td style="padding:9px 12px">
                                         <div style="display:flex;align-items:center;gap:6px">
-                                            <div style="width:70px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+                                            <div style="width:70px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
                                                 <div style="height:100%;width:@(Math.Min(p.AvgRate * 100, 100).ToString("F0"))%;background:@rateColor;border-radius:2px"></div>
                                             </div>
                                             <span style="font-weight:700;color:@rateColor;font-family:monospace">%@((p.AvgRate * 100).ToString("F1"))</span>
                                         </div>
                                     </td>
-                                    <td style="padding:9px 12px;color:#64748b;font-family:monospace">@p.AboveTarget / @p.StCount ST</td>
+                                    <td style="padding:9px 12px;color:var(--text-faint);font-family:monospace">@p.AboveTarget / @p.StCount ST</td>
                                 </tr>
                             }
                         </tbody>
@@ -529,8 +512,8 @@
             var bpPharmTitle = Session.IsST ? "Bricklerimdeki En İyi Eczaneler"
                              : Session.IsBM ? "Bölgedeki En İyi Eczaneler" : "En İyi Eczaneler";
             <div style="margin:18px 0 10px;display:flex;align-items:center;gap:8px">
-                <span style="font-size:14px;font-weight:700;color:#f1f5f9">🗺 Brick & Eczane Performansı</span>
-                <span style="font-size:11px;color:#475569">@selectedYear @selectedQuarter</span>
+                <span style="font-size:14px;font-weight:700;color:var(--text)">🗺 Brick & Eczane Performansı</span>
+                <span style="font-size:11px;color:var(--text-ghost)">@selectedYear @selectedQuarter</span>
             </div>
             <BrickPharmacyPanel Year="selectedYear" Quarter="selectedQuarter"
                                 RegionId="bpRegionId" UserId="bpUserId"

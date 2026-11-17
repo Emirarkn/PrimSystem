@@ -25,20 +25,20 @@
     return;
 }
 
-<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+<div style="min-height:100vh;background:var(--bg-base);font-family:Segoe UI,sans-serif">
     <div style="max-width:1000px;margin:0 auto;padding:20px">
 
         @if (!string.IsNullOrEmpty(msg))
         {
-            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">@msg</div>
+            <div style="background:rgba(10,107,102,0.1);border:1px solid rgba(10,107,102,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:var(--accent);font-size:13px">@msg</div>
         }
 
         <!-- DOSYA TÜRÜ SEÇİMİ -->
-        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:14px">
-            <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:4px">Veri Yükleme</div>
-            <div style="font-size:12px;color:#64748b;margin-bottom:12px">Yüklenecek dosya türünü seçin — tarama ve işleme kuralları seçime göre değişir.</div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:14px">
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">Veri Yükleme</div>
+            <div style="font-size:12px;color:var(--text-faint);margin-bottom:12px">Yüklenecek dosya türünü seçin — tarama ve işleme kuralları seçime göre değişir.</div>
             <select @bind="selectedType" @bind:after="OnTypeChanged" disabled="@inputsLocked"
-                    style="width:100%;background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600">
+                    style="width:100%;background:var(--border);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600">
                 <option value="">— Dosya türü seçin —</option>
                 @foreach (var t in Types)
                 {
@@ -47,31 +47,31 @@
             </select>
             @if (inputsLocked)
             {
-                <div style="font-size:11px;color:#f59e0b;margin-top:6px">⏳ İşlem/önizleme sürerken tür değiştirilemez.</div>
+                <div style="font-size:11px;color:var(--warning);margin-top:6px">⏳ İşlem/önizleme sürerken tür değiştirilemez.</div>
             }
         </div>
 
         <!-- SEÇİLEN TÜRE ÖZEL DİNAMİK PANEL -->
         @if (Selected is { } meta)
         {
-            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:14px">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:14px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-                    <div style="font-size:15px;font-weight:600;color:#f1f5f9">@meta.Title</div>
+                    <div style="font-size:15px;font-weight:600;color:var(--text)">@meta.Title</div>
                     <div style="display:flex;gap:6px">
-                        <button @onclick="() => DownloadTemplate(meta.TemplateKey)" style="padding:3px 10px;background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">📥 Örnek Şablon İndir</button>
+                        <button @onclick="() => DownloadTemplate(meta.TemplateKey)" style="padding:3px 10px;background:rgba(42,106,158,0.1);color:var(--info);border:1px solid rgba(42,106,158,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">📥 Örnek Şablon İndir</button>
                         @if (meta.Key == "target")
                         {
-                            <button @onclick='() => Nav.NavigateTo("/periods")' style="padding:3px 10px;background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">+ Dönem Ekle</button>
+                            <button @onclick='() => Nav.NavigateTo("/periods")' style="padding:3px 10px;background:rgba(42,106,158,0.1);color:var(--info);border:1px solid rgba(42,106,158,0.25);border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">+ Dönem Ekle</button>
                         }
                     </div>
                 </div>
-                <div style="font-size:11px;color:#64748b;margin-bottom:10px">@meta.Desc</div>
+                <div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">@meta.Desc</div>
 
                 @* ── Türe özel parametreler ───────────────────────────── *@
                 @if (meta.Key == "target" || meta.Key == "pharmacyplan")
                 {
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                        <span style="font-size:12px;color:#94a3b8">Yıl:</span>
+                        <span style="font-size:12px;color:var(--text-dim)">Yıl:</span>
                         <select @bind="targetYear" disabled="@inputsLocked" style="@SelStyle">
                             @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--) { <option value="@y">@y</option> }
                         </select>
@@ -80,11 +80,11 @@
                 @if (meta.Key == "ruta" || meta.Key == "visitplan")
                 {
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                        <span style="font-size:12px;color:#94a3b8">Yıl:</span>
+                        <span style="font-size:12px;color:var(--text-dim)">Yıl:</span>
                         <select @bind="periodYear" disabled="@inputsLocked" style="@SelStyle">
                             @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 3; y--) { <option value="@y">@y</option> }
                         </select>
-                        <span style="font-size:12px;color:#94a3b8">Çeyrek:</span>
+                        <span style="font-size:12px;color:var(--text-dim)">Çeyrek:</span>
                         <select @bind="periodQuarter" disabled="@inputsLocked" style="@SelStyle">
                             <option value="Q1">Q1 (Oca-Mar)</option>
                             <option value="Q2">Q2 (Nis-Haz)</option>
@@ -97,22 +97,22 @@
                 @* ── Üstüne Ekle / Sıfırla ────────────────────────────── *@
                 @if (meta.SupportsReplace)
                 {
-                    var mergeStyle = "flex:1;padding:7px;background:" + (!replaceMode ? "#3b82f6" : "#0a0f1a") + ";color:" + (!replaceMode ? "#fff" : "#64748b") + ";border:none;cursor:pointer;font-weight:600";
-                    var replStyle  = "flex:1;padding:7px;background:" + (replaceMode  ? "#ef4444" : "#0a0f1a") + ";color:" + (replaceMode  ? "#fff" : "#64748b") + ";border:none;cursor:pointer;font-weight:600";
-                    <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid #1e293b;border-radius:8px;overflow:hidden;font-size:12px">
+                    var mergeStyle = "flex:1;padding:7px;background:" + (!replaceMode ? "var(--info)" : "var(--bg-base)") + ";color:" + (!replaceMode ? "#fff" : "var(--text-faint)") + ";border:none;cursor:pointer;font-weight:600";
+                    var replStyle  = "flex:1;padding:7px;background:" + (replaceMode  ? "var(--danger)" : "var(--bg-base)") + ";color:" + (replaceMode  ? "#fff" : "var(--text-faint)") + ";border:none;cursor:pointer;font-weight:600";
+                    <div style="display:flex;gap:0;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">
                         <button @onclick="() => replaceMode = false" style="@mergeStyle" disabled="@inputsLocked">🔄 Üstüne Ekle</button>
                         <button @onclick="() => replaceMode = true"  style="@replStyle" disabled="@inputsLocked">@meta.ReplaceLabel</button>
                     </div>
                     @if (replaceMode)
                     {
-                        <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+                        <div style="background:rgba(217,148,40,0.1);border:1px solid rgba(217,148,40,0.3);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--warning);font-size:12px">
                             ⚠ Bu mod seçiliyken @meta.ReplaceScope ait mevcut tüm veri önce silinir, ardından dosyadaki veri eklenir.
                         </div>
                     }
                 }
                 @if (meta.Key == "visitplan")
                 {
-                    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+                    <div style="background:rgba(217,148,40,0.08);border:1px solid rgba(217,148,40,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--warning);font-size:12px">
                         ⚠ Yükleme seçilen dönemin planını tamamen değiştirir.
                     </div>
                 }
@@ -121,7 +121,7 @@
                     <InputFile OnChange="@(e => PrepareImport(e, meta.Key))" accept=".xlsx,.xls" disabled="@inputsLocked" />
                     @if (loading == meta.Key)
                     {
-                        <span style="color:#f59e0b;font-size:12px">⏳ İşleniyor...</span>
+                        <span style="color:var(--warning);font-size:12px">⏳ İşleniyor...</span>
                     }
                 </div>
 
@@ -131,12 +131,12 @@
         }
 
         <!-- YÜKLEME KÜTÜPHANESİ -->
-        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:10px">📚 Yükleme Kütüphanesi
-                <span style="color:#64748b;font-weight:400;font-size:11px">— dosyalar saklanır; geçmiş bir dosyayı tek tıkla yeniden aktifleştirin (Değiştir/Üstüne Ekle)</span></div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📚 Yükleme Kütüphanesi
+                <span style="color:var(--text-faint);font-weight:400;font-size:11px">— dosyalar saklanır; geçmiş bir dosyayı tek tıkla yeniden aktifleştirin (Değiştir/Üstüne Ekle)</span></div>
             @if (!batches.Any())
             {
-                <div style="color:#64748b;font-size:12px;text-align:center;padding:12px">Kütüphane boş — yeni yüklemeler buraya eklenir (tablo için <strong>db/import-batch.sql</strong> çalıştırılmalı)</div>
+                <div style="color:var(--text-faint);font-size:12px;text-align:center;padding:12px">Kütüphane boş — yeni yüklemeler buraya eklenir (tablo için <strong>db/import-batch.sql</strong> çalıştırılmalı)</div>
             }
             else
             {
@@ -145,7 +145,7 @@
                         <tr>
                             @foreach (var h in new[] { "DURUM", "TİP", "MOD", "DOSYA", "SATIR", "TARİH", "İŞLEM" })
                             {
-                                <th style="padding:6px 8px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                <th style="padding:6px 8px;text-align:left;color:var(--text-faint);font-size:10px;border-bottom:1px solid var(--border)">@h</th>
                             }
                         </tr>
                     </thead>
@@ -156,26 +156,26 @@
                                 <td style="padding:6px 8px">
                                     @if (b.IsActive)
                                     {
-                                        <span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.15);color:#10b981">● AKTİF</span>
+                                        <span style="padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(10,107,102,0.15);color:var(--accent)">● AKTİF</span>
                                     }
                                     else
                                     {
-                                        <span style="padding:2px 7px;border-radius:4px;font-size:10px;background:rgba(100,116,139,0.12);color:#64748b">pasif</span>
+                                        <span style="padding:2px 7px;border-radius:4px;font-size:10px;background:rgba(98,119,116,0.12);color:var(--text-faint)">pasif</span>
                                     }
                                 </td>
-                                <td style="padding:6px 8px;color:#f1f5f9">@b.FileType</td>
-                                <td style="padding:6px 8px"><span style="color:@(b.Mode == "Replace" ? "#ef4444" : "#3b82f6")">@(b.Mode == "Replace" ? "Değiştir" : "Üstüne Ekle")</span></td>
-                                <td style="padding:6px 8px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@b.FileName</td>
-                                <td style="padding:6px 8px;color:#f1f5f9;font-family:monospace">@(b.RowCount?.ToString("N0") ?? "—")</td>
-                                <td style="padding:6px 8px;color:#94a3b8">@b.UploadedAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
+                                <td style="padding:6px 8px;color:var(--text)">@b.FileType</td>
+                                <td style="padding:6px 8px"><span style="color:@(b.Mode == "Replace" ? "var(--danger)" : "var(--info)")">@(b.Mode == "Replace" ? "Değiştir" : "Üstüne Ekle")</span></td>
+                                <td style="padding:6px 8px;color:var(--text-dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@b.FileName</td>
+                                <td style="padding:6px 8px;color:var(--text);font-family:monospace">@(b.RowCount?.ToString("N0") ?? "—")</td>
+                                <td style="padding:6px 8px;color:var(--text-dim)">@b.UploadedAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
                                 <td style="padding:6px 8px;white-space:nowrap">
                                     @if (!b.IsActive)
                                     {
                                         <button @onclick="() => ReactivateBatch(b.BatchId)" disabled="@inputsLocked" title="Bu dosyayı yeniden yükle (aktifle)"
-                                                style="padding:2px 10px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);cursor:pointer;margin-right:4px">↻ Aktifle</button>
+                                                style="padding:2px 10px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(10,107,102,0.12);color:var(--accent);border:1px solid rgba(10,107,102,0.3);cursor:pointer;margin-right:4px">↻ Aktifle</button>
                                     }
                                     <button @onclick="() => DeleteBatch(b.BatchId)" title="Kütüphaneden sil"
-                                            style="padding:2px 9px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(100,116,139,0.1);color:#64748b;border:1px solid rgba(100,116,139,0.3);cursor:pointer">×</button>
+                                            style="padding:2px 9px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(98,119,116,0.1);color:var(--text-faint);border:1px solid rgba(98,119,116,0.3);cursor:pointer">×</button>
                                 </td>
                             </tr>
                         }
@@ -185,11 +185,11 @@
         </div>
 
         <!-- GEÇMİŞ -->
-        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px">
-            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:10px">Yükleme Geçmişi</div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Yükleme Geçmişi</div>
             @if (!logs.Any())
             {
-                <div style="color:#64748b;font-size:12px;text-align:center;padding:12px">Henüz yükleme yok</div>
+                <div style="color:var(--text-faint);font-size:12px;text-align:center;padding:12px">Henüz yükleme yok</div>
             }
             else
             {
@@ -198,7 +198,7 @@
                         <tr>
                             @foreach (var h in new[] { "TARİH", "TİP", "DOSYA", "SATIR", "GÜNCEL", "DURUM", "İŞLEM" })
                             {
-                                <th style="padding:6px 8px;text-align:left;color:#64748b;font-size:10px;border-bottom:1px solid #1e293b">@h</th>
+                                <th style="padding:6px 8px;text-align:left;color:var(--text-faint);font-size:10px;border-bottom:1px solid var(--border)">@h</th>
                             }
                         </tr>
                     </thead>
@@ -207,44 +207,44 @@
                         {
                             var (bg, fg) = StatusColors(l.Status);
                             <tr @key="l.LogId" style="border-bottom:1px solid #1e293b22">
-                                <td style="padding:6px 8px;color:#94a3b8">@l.ImportedAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
-                                <td style="padding:6px 8px;color:#f1f5f9">@l.FileType</td>
-                                <td style="padding:6px 8px;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@l.FileName</td>
-                                <td style="padding:6px 8px;color:#f1f5f9;font-family:monospace">@(l.ImportRowCount?.ToString("N0") ?? "—")</td>
-                                <td style="padding:6px 8px;color:#f59e0b;font-family:monospace">@((l.ReplacedCount ?? 0).ToString("N0"))</td>
+                                <td style="padding:6px 8px;color:var(--text-dim)">@l.ImportedAt.ToLocalTime().ToString("dd.MM HH:mm")</td>
+                                <td style="padding:6px 8px;color:var(--text)">@l.FileType</td>
+                                <td style="padding:6px 8px;color:var(--text-faint);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@l.FileName</td>
+                                <td style="padding:6px 8px;color:var(--text);font-family:monospace">@(l.ImportRowCount?.ToString("N0") ?? "—")</td>
+                                <td style="padding:6px 8px;color:var(--warning);font-family:monospace">@((l.ReplacedCount ?? 0).ToString("N0"))</td>
                                 <td style="padding:6px 8px">
                                     <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;background:@bg;color:@fg">@l.Status</span>
                                 </td>
                                 <td style="padding:6px 8px;white-space:nowrap">
                                     @if (confirmRollbackId == l.LogId)
                                     {
-                                        <span style="font-size:11px;color:#ef4444;margin-right:6px">Geri alınsın mı?</span>
-                                        <button @onclick="() => Rollback(l.LogId)" disabled="@rollbackBusy" style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);cursor:pointer">@(rollbackBusy ? "..." : "Evet")</button>
-                                        <button @onclick="() => confirmRollbackId = null" style="padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(100,116,139,0.1);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);cursor:pointer">Vazgeç</button>
+                                        <span style="font-size:11px;color:var(--danger);margin-right:6px">Geri alınsın mı?</span>
+                                        <button @onclick="() => Rollback(l.LogId)" disabled="@rollbackBusy" style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(181,65,58,0.2);color:var(--danger);border:1px solid rgba(181,65,58,0.4);cursor:pointer">@(rollbackBusy ? "..." : "Evet")</button>
+                                        <button @onclick="() => confirmRollbackId = null" style="padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(98,119,116,0.1);color:var(--text-dim);border:1px solid rgba(98,119,116,0.3);cursor:pointer">Vazgeç</button>
                                     }
                                     else
                                     {
                                         @if (!string.IsNullOrEmpty(l.ValidationErrors))
                                         {
                                             <button @onclick="() => expandedLogId = expandedLogId == l.LogId ? null : l.LogId" title="Atlanan satır detayları"
-                                                    style="padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);cursor:pointer;margin-right:4px">≣</button>
+                                                    style="padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(217,148,40,0.1);color:var(--warning);border:1px solid rgba(217,148,40,0.3);cursor:pointer;margin-right:4px">≣</button>
                                         }
                                         @if (l.Status is "Success" or "Partial")
                                         {
                                             @if (ImportService.SupportsRollback(l.FileType))
                                             {
                                                 <button @onclick="() => confirmRollbackId = l.LogId" title="İçe aktarmayı geri al"
-                                                        style="padding:2px 10px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);cursor:pointer">×</button>
+                                                        style="padding:2px 10px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(181,65,58,0.1);color:var(--danger);border:1px solid rgba(181,65,58,0.3);cursor:pointer">×</button>
                                             }
                                             else
                                             {
-                                                <span title="Eşleştirme içe aktarmaları geri alınamaz" style="font-size:11px;color:#64748b">geri alınamaz</span>
+                                                <span title="Eşleştirme içe aktarmaları geri alınamaz" style="font-size:11px;color:var(--text-faint)">geri alınamaz</span>
                                             }
                                         }
                                         else
                                         {
                                             <button @onclick="() => DeleteLog(l.LogId)" disabled="@rollbackBusy" title="Log kaydını sil"
-                                                    style="padding:2px 10px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(100,116,139,0.1);color:#64748b;border:1px solid rgba(100,116,139,0.3);cursor:pointer">×</button>
+                                                    style="padding:2px 10px;border-radius:4px;font-size:13px;font-weight:700;background:rgba(98,119,116,0.1);color:var(--text-faint);border:1px solid rgba(98,119,116,0.3);cursor:pointer">×</button>
                                         }
                                     }
                                 </td>
@@ -252,8 +252,8 @@
                             @if (expandedLogId == l.LogId && !string.IsNullOrEmpty(l.ValidationErrors))
                             {
                                 <tr>
-                                    <td colspan="7" style="padding:8px 12px;background:rgba(245,158,11,0.05)">
-                                        <div style="max-height:140px;overflow-y:auto;font-size:11px;color:#f59e0b">
+                                    <td colspan="7" style="padding:8px 12px;background:rgba(217,148,40,0.05)">
+                                        <div style="max-height:140px;overflow-y:auto;font-size:11px;color:var(--warning)">
                                             @foreach (var err in DeserializeErrors(l.ValidationErrors))
                                             {
                                                 <div>⚠ @err</div>
@@ -304,7 +304,7 @@
     };
 
     private TypeMeta? Selected => Types.FirstOrDefault(t => t.Key == selectedType);
-    private string SelStyle => "background:#1e293b;color:#f1f5f9;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:12px";
+    private string SelStyle => "background:var(--border);color:var(--text);border:1px solid var(--border-strong);border-radius:6px;padding:4px 8px;font-size:12px";
 
     private string selectedType = "";
     private ImportResult? result;
@@ -407,9 +407,9 @@
 
     private static (string Bg, string Fg) StatusColors(string status) => status switch
     {
-        "Success" => ("rgba(16,185,129,0.12)", "#10b981"),
-        "Partial" => ("rgba(245,158,11,0.12)", "#f59e0b"),
-        _         => ("rgba(239,68,68,0.1)",  "#ef4444")
+        "Success" => ("rgba(10,107,102,0.12)", "var(--accent)"),
+        "Partial" => ("rgba(217,148,40,0.12)", "var(--warning)"),
+        _         => ("rgba(181,65,58,0.1)",  "var(--danger)")
     };
 
     private static List<string> DeserializeErrors(string json)
@@ -548,48 +548,48 @@
     }
 
     // ── Önizleme kartı (dry-run sonucu + kapsam kapısı + onay/iptal) ──────────
-    private RenderFragment PreviewCard => @<div style="margin-top:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:14px">
-        <div style="font-size:13px;font-weight:700;color:#3b82f6;margin-bottom:8px">🔍 Önizleme — @pendingFileName</div>
+    private RenderFragment PreviewCard => @<div style="margin-top:10px;background:rgba(42,106,158,0.06);border:1px solid rgba(42,106,158,0.3);border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--info);margin-bottom:8px">🔍 Önizleme — @pendingFileName</div>
         @if (previewResult!.DuplicateOf != null)
         {
-            <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:7px;padding:8px 12px;margin-bottom:8px;color:#f59e0b;font-size:12px">
+            <div style="background:rgba(217,148,40,0.12);border:1px solid rgba(217,148,40,0.35);border-radius:7px;padding:8px 12px;margin-bottom:8px;color:var(--warning);font-size:12px">
                 ⚠ Bu dosya (aynı içerikle) <strong>@previewResult.DuplicateOf.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</strong> tarihinde zaten yüklenmiş.
             </div>
         }
         <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
-            <span style="color:#94a3b8">@previewResult.TotalRows satır okundu</span>
-            <span style="color:#10b981">@previewResult.InsertedRows @(pendingType == "productmap" ? "ürün alias alacak" : "yeni eklenecek")</span>
+            <span style="color:var(--text-dim)">@previewResult.TotalRows satır okundu</span>
+            <span style="color:var(--accent)">@previewResult.InsertedRows @(pendingType == "productmap" ? "ürün alias alacak" : "yeni eklenecek")</span>
             @if (pendingType != "productmap")
             {
-                <span style="color:#3b82f6">@previewResult.UpdatedRows güncellenecek</span>
+                <span style="color:var(--info)">@previewResult.UpdatedRows güncellenecek</span>
             }
-            <span style="color:@(previewResult.SkippedRows > 0 ? "#f59e0b" : "#64748b")">@previewResult.SkippedRows atlanacak</span>
+            <span style="color:@(previewResult.SkippedRows > 0 ? "var(--warning)" : "var(--text-faint)")">@previewResult.SkippedRows atlanacak</span>
             @if (previewResult.FileTotal.HasValue)
             {
-                <span style="color:#94a3b8">toplam: @previewResult.FileTotal.Value.ToString("N0")</span>
+                <span style="color:var(--text-dim)">toplam: @previewResult.FileTotal.Value.ToString("N0")</span>
             }
             @if (previewResult.DetailRowCount > 0)
             {
-                <span style="color:#94a3b8">@previewResult.DetailRowCount.ToString("N0") GLN detay</span>
+                <span style="color:var(--text-dim)">@previewResult.DetailRowCount.ToString("N0") GLN detay</span>
             }
         </div>
 
         @* ── Eşleşme kapsamı (double-check) ─────────────────────────── *@
         @if (previewResult.TotalBrandCount > 0 || previewResult.TotalBrickCount > 0 || previewResult.TotalPeriodCount > 0)
         {
-            <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;padding:8px 12px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.2);border-radius:7px">
-                <span style="color:#94a3b8;font-weight:600">Eşleşme:</span>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:8px;padding:8px 12px;background:rgba(10,107,102,0.05);border:1px solid rgba(10,107,102,0.2);border-radius:7px">
+                <span style="color:var(--text-dim);font-weight:600">Eşleşme:</span>
                 @if (previewResult.TotalBrandCount > 0)
                 {
-                    <span style="color:@(previewResult.UnmatchedBrands.Any() ? "#f59e0b" : "#10b981")">Marka @previewResult.MatchedBrandCount/@previewResult.TotalBrandCount</span>
+                    <span style="color:@(previewResult.UnmatchedBrands.Any() ? "var(--warning)" : "var(--accent)")">Marka @previewResult.MatchedBrandCount/@previewResult.TotalBrandCount</span>
                 }
                 @if (previewResult.TotalBrickCount > 0)
                 {
-                    <span style="color:@(previewResult.MatchedBrickCount < previewResult.TotalBrickCount ? "#f59e0b" : "#10b981")">Brick @previewResult.MatchedBrickCount/@previewResult.TotalBrickCount</span>
+                    <span style="color:@(previewResult.MatchedBrickCount < previewResult.TotalBrickCount ? "var(--warning)" : "var(--accent)")">Brick @previewResult.MatchedBrickCount/@previewResult.TotalBrickCount</span>
                 }
                 @if (previewResult.TotalPeriodCount > 0)
                 {
-                    <span style="color:@(previewResult.MatchedPeriodCount < previewResult.TotalPeriodCount ? "#f59e0b" : "#10b981")">Dönem @previewResult.MatchedPeriodCount/@previewResult.TotalPeriodCount</span>
+                    <span style="color:@(previewResult.MatchedPeriodCount < previewResult.TotalPeriodCount ? "var(--warning)" : "var(--accent)")">Dönem @previewResult.MatchedPeriodCount/@previewResult.TotalPeriodCount</span>
                 }
             </div>
         }
@@ -597,7 +597,7 @@
         @* ── Hedef: atanmamış satır özeti (— / BRICK ATANMAMIŞ) ───────── *@
         @if (previewResult.UnassignedTargetRows > 0)
         {
-            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+            <div style="background:rgba(217,148,40,0.08);border:1px solid rgba(217,148,40,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--warning);font-size:12px">
                 ⚠ <strong>@previewResult.UnassignedTargetRows.ToString("N0") satır atanmamış</strong> (Mümessil '—' / Brick '(BRICK ATANMAMIŞ)') —
                 toplam <strong>@previewResult.UnassignedTargetQty.ToString("N0")</strong> hedef hiçbir ST'ye düşmez (skora dahil edilmez).
             </div>
@@ -606,7 +606,7 @@
         @* ── Eczane planı: GLN'i boş satırlar ─────────────────────────── *@
         @if (previewResult.BlankGlnRows > 0)
         {
-            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:12px">
+            <div style="background:rgba(217,148,40,0.08);border:1px solid rgba(217,148,40,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--warning);font-size:12px">
                 ⚠ <strong>@previewResult.BlankGlnRows.ToString("N0") satırın GLN'i boş</strong> — eşleşemediği için işaretlenmeyecek.
                 Kaynak raporda düzeltilmesi gereken bir veri kalitesi sorunu.
             </div>
@@ -615,7 +615,7 @@
         @* ── Brick→ST haritası senkronu (Hedef/Brick importu) ─────────── *@
         @if (previewResult.BrickAssignmentsSynced > 0 || previewResult.BrickAssignmentsDeactivated > 0)
         {
-            <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#93c5fd;font-size:12px">
+            <div style="background:rgba(42,106,158,0.06);border:1px solid rgba(42,106,158,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--info-text);font-size:12px">
                 🗺 Brick→ST haritası: <strong>@previewResult.BrickAssignmentsSynced</strong> atama yazılacak/güncellenecek@(previewResult.BrickAssignmentsDeactivated > 0 ? $", {previewResult.BrickAssignmentsDeactivated} eski/çakışan atama pasiflenecek" : "").
                 Hedef ve gerçekleşen bu haritadan hesaplanır.
             </div>
@@ -624,55 +624,55 @@
         @* ── KAPI: eşleşmeyen marka → satış skora yansımaz ──────────── *@
         @if (previewResult.UnmatchedBrands.Any())
         {
-            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#ef4444;font-size:12px">
+            <div style="background:rgba(181,65,58,0.1);border:1px solid rgba(181,65,58,0.4);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--danger);font-size:12px">
                 ⛔ <strong>Eşleşmeyen marka(lar)</strong> — bu satırlar atlanır, satış skora <strong>YANSIMAZ</strong>:
-                <div style="color:#fca5a5;margin-top:4px">@string.Join(", ", previewResult.UnmatchedBrands.Take(20))@(previewResult.UnmatchedBrands.Count > 20 ? $" (+{previewResult.UnmatchedBrands.Count - 20})" : "")</div>
-                <div style="color:#94a3b8;margin-top:4px">Çözüm: <strong>"Ürün-Marka Eşleştirme"</strong> dosyasını yükleyip alias ekleyin, sonra tekrar deneyin.</div>
+                <div style="color:var(--danger-text);margin-top:4px">@string.Join(", ", previewResult.UnmatchedBrands.Take(20))@(previewResult.UnmatchedBrands.Count > 20 ? $" (+{previewResult.UnmatchedBrands.Count - 20})" : "")</div>
+                <div style="color:var(--text-dim);margin-top:4px">Çözüm: <strong>"Ürün-Marka Eşleştirme"</strong> dosyasını yükleyip alias ekleyin, sonra tekrar deneyin.</div>
             </div>
         }
 
         @* ── Bulanık eşleşme önerileri ("bunu mu demek istediniz") + tek-tık eşle ── *@
         @if (previewResult.MatchSuggestions.Any())
         {
-            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:12px">
-                <div style="color:#f59e0b;font-weight:600;margin-bottom:6px">🔎 Eşleşmeyen değerler için olası karşılıklar (tek tıkla eşle &amp; hatırla):</div>
+            <div style="background:rgba(217,148,40,0.08);border:1px solid rgba(217,148,40,0.35);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:12px">
+                <div style="color:var(--warning);font-weight:600;margin-bottom:6px">🔎 Eşleşmeyen değerler için olası karşılıklar (tek tıkla eşle &amp; hatırla):</div>
                 @foreach (var s in previewResult.MatchSuggestions.Take(20))
                 {
                     <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
-                        <span style="color:#fcd34d;flex:1">@TypeLabel(s.Type): <strong>@s.Source</strong> → @s.Suggestion</span>
+                        <span style="color:var(--warning-text);flex:1">@TypeLabel(s.Type): <strong>@s.Source</strong> → @s.Suggestion</span>
                         <button class="btn-secondary" style="padding:2px 10px;font-size:11px" disabled="@savingAlias"
                                 @onclick="() => AcceptSuggestion(s)">✓ Eşle</button>
                     </div>
                 }
-                <div style="color:#94a3b8;margin-top:6px">Eşlersen kaynak adı bu karşılığa "hatırlanır"; sonraki yüklemelerde otomatik eşleşir.</div>
-                @if (aliasMsg != null) { <div style="color:@(aliasMsg.StartsWith("Hata") ? "#fca5a5" : "#10b981");margin-top:4px">@aliasMsg</div> }
+                <div style="color:var(--text-dim);margin-top:6px">Eşlersen kaynak adı bu karşılığa "hatırlanır"; sonraki yüklemelerde otomatik eşleşir.</div>
+                @if (aliasMsg != null) { <div style="color:@(aliasMsg.StartsWith("Hata") ? "var(--danger-text)" : "var(--accent)");margin-top:4px">@aliasMsg</div> }
             </div>
         }
 
         @* ── Ürün-Marka alias atama önizlemesi ─────────────────────── *@
         @if (previewResult.ProductMapPreview.Any())
         {
-            <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;max-height:160px;overflow-y:auto">
-                <div style="color:#94a3b8;font-weight:600;margin-bottom:4px">Atanacak alias'lar (Kanonik Ürün ← Marka):</div>
-                @foreach (var line in previewResult.ProductMapPreview.Take(40)) { <div style="color:#cbd5e1">• @line</div> }
-                @if (previewResult.ProductMapPreview.Count > 40) { <div style="color:#64748b">… +@(previewResult.ProductMapPreview.Count - 40) ürün daha</div> }
+            <div style="background:rgba(42,106,158,0.05);border:1px solid rgba(42,106,158,0.2);border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;max-height:160px;overflow-y:auto">
+                <div style="color:var(--text-dim);font-weight:600;margin-bottom:4px">Atanacak alias'lar (Kanonik Ürün ← Marka):</div>
+                @foreach (var line in previewResult.ProductMapPreview.Take(40)) { <div style="color:var(--text-muted)">• @line</div> }
+                @if (previewResult.ProductMapPreview.Count > 40) { <div style="color:var(--text-faint)">… +@(previewResult.ProductMapPreview.Count - 40) ürün daha</div> }
             </div>
         }
 
         @if (previewResult.Errors.Any())
         {
-            <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:#f59e0b;font-size:11px;max-height:100px;overflow-y:auto">
+            <div style="background:rgba(217,148,40,0.08);border:1px solid rgba(217,148,40,0.25);border-radius:7px;padding:8px 12px;margin-bottom:10px;color:var(--warning);font-size:11px;max-height:100px;overflow-y:auto">
                 @foreach (var e in previewResult.Errors.Take(10)) { <div>⚠ @e</div> }
-                @if (previewResult.Errors.Count > 10) { <div style="color:#94a3b8">… +@(previewResult.Errors.Count - 10) uyarı daha (yükleme sonrası geçmişten görülebilir)</div> }
+                @if (previewResult.Errors.Count > 10) { <div style="color:var(--text-dim)">… +@(previewResult.Errors.Count - 10) uyarı daha (yükleme sonrası geçmişten görülebilir)</div> }
             </div>
         }
         <div style="display:flex;gap:8px">
             <button @onclick="ConfirmPending" disabled="@(loading != "")"
-                    style="padding:8px 18px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+                    style="padding:8px 18px;background:linear-gradient(135deg,var(--accent),#059669);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
                 ✅ Onayla ve Yükle
             </button>
             <button @onclick="CancelPending" disabled="@(loading != "")"
-                    style="padding:8px 18px;background:rgba(100,116,139,0.15);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:8px;font-size:13px;cursor:pointer">
+                    style="padding:8px 18px;background:rgba(98,119,116,0.15);color:var(--text-dim);border:1px solid rgba(98,119,116,0.3);border-radius:8px;font-size:13px;cursor:pointer">
                 ✖ İptal
             </button>
         </div>
@@ -685,52 +685,52 @@
         return @<div>
             @if (r.Success && !r.IsDryRun)
             {
-                <div style="margin-top:8px;color:#10b981;font-size:12px">✓ @r.InsertedRows yeni · @r.UpdatedRows güncellendi · @r.SkippedRows atlandı · @r.ProcessingMs ms</div>
+                <div style="margin-top:8px;color:var(--accent);font-size:12px">✓ @r.InsertedRows yeni · @r.UpdatedRows güncellendi · @r.SkippedRows atlandı · @r.ProcessingMs ms</div>
                 @if (r.DetailRowCount > 0)
                 {
-                    <div style="margin-top:4px;color:#94a3b8;font-size:12px">📦 @r.DetailRowCount.ToString("N0") GLN/kurum detay satırı kaydedildi</div>
+                    <div style="margin-top:4px;color:var(--text-dim);font-size:12px">📦 @r.DetailRowCount.ToString("N0") GLN/kurum detay satırı kaydedildi</div>
                 }
                 @if (r.Verified == true)
                 {
-                    <div style="margin-top:4px;color:#10b981;font-size:12px">
+                    <div style="margin-top:4px;color:var(--accent);font-size:12px">
                         ✅ Teyit: @r.VerifiedCount/@r.ExpectedCount satır DB'de@(r.FileTotal.HasValue ? $" · toplam {r.DbTotal:N0} birebir eşleşti" : "")
                     </div>
                 }
                 else if (r.Verified == false)
                 {
-                    <div style="margin-top:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:7px;padding:8px 12px;color:#ef4444;font-size:12px">
+                    <div style="margin-top:4px;background:rgba(181,65,58,0.1);border:1px solid rgba(181,65,58,0.35);border-radius:7px;padding:8px 12px;color:var(--danger);font-size:12px">
                         ⚠ TEYİT BAŞARISIZ — beklenen @r.ExpectedCount satır, DB'de @r.VerifiedCount bulundu@(r.FileTotal.HasValue ? $" (dosya toplamı {r.FileTotal:N0}, DB toplamı {r.DbTotal:N0})" : "").
                         Yükleme Geçmişi'nden bu içe aktarmayı geri alıp tekrar deneyin.
                     </div>
                 }
                 @if (r.DetailConsistent == false)
                 {
-                    <div style="margin-top:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:7px;padding:8px 12px;color:#ef4444;font-size:12px">
+                    <div style="margin-top:4px;background:rgba(181,65,58,0.1);border:1px solid rgba(181,65,58,0.35);border-radius:7px;padding:8px 12px;color:var(--danger);font-size:12px">
                         ⚠ GLN detay toplamı brick toplamıyla uyuşmuyor — veriyi geri alıp tekrar yükleyin.
                     </div>
                 }
                 @if (r.BrickAssignmentsSynced > 0 || r.BrickAssignmentsDeactivated > 0)
                 {
-                    <div style="margin-top:4px;color:#93c5fd;font-size:12px">🗺 Brick→ST: @r.BrickAssignmentsSynced atama yazıldı@(r.BrickAssignmentsDeactivated > 0 ? $", {r.BrickAssignmentsDeactivated} eski/çakışan pasiflendi" : "")</div>
+                    <div style="margin-top:4px;color:var(--info-text);font-size:12px">🗺 Brick→ST: @r.BrickAssignmentsSynced atama yazıldı@(r.BrickAssignmentsDeactivated > 0 ? $", {r.BrickAssignmentsDeactivated} eski/çakışan pasiflendi" : "")</div>
                 }
                 @if (r.UnassignedTargetRows > 0)
                 {
-                    <div style="margin-top:4px;color:#f59e0b;font-size:12px">⚠ @r.UnassignedTargetRows.ToString("N0") atanmamış satır (toplam @r.UnassignedTargetQty.ToString("N0") hedef) hiçbir ST'ye düşmedi</div>
+                    <div style="margin-top:4px;color:var(--warning);font-size:12px">⚠ @r.UnassignedTargetRows.ToString("N0") atanmamış satır (toplam @r.UnassignedTargetQty.ToString("N0") hedef) hiçbir ST'ye düşmedi</div>
                 }
                 @if (r.BlankGlnRows > 0)
                 {
-                    <div style="margin-top:4px;color:#f59e0b;font-size:12px">⚠ @r.BlankGlnRows.ToString("N0") satırın GLN'i boştu — işaretlenmedi</div>
+                    <div style="margin-top:4px;color:var(--warning);font-size:12px">⚠ @r.BlankGlnRows.ToString("N0") satırın GLN'i boştu — işaretlenmedi</div>
                 }
             }
             @if (r.Errors.Any())
             {
-                <div style="margin-top:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:7px;padding:8px 12px;color:#f59e0b;font-size:11px;max-height:100px;overflow-y:auto">
+                <div style="margin-top:8px;background:rgba(217,148,40,0.08);border:1px solid rgba(217,148,40,0.25);border-radius:7px;padding:8px 12px;color:var(--warning);font-size:11px;max-height:100px;overflow-y:auto">
                     @foreach (var e in r.Errors.Take(8)) { <div>⚠ @e</div> }
                 </div>
             }
             @if (!string.IsNullOrEmpty(r.Error))
             {
-                <div style="margin-top:8px;color:#ef4444;font-size:12px">❌ @r.Error</div>
+                <div style="margin-top:8px;color:var(--danger);font-size:12px">❌ @r.Error</div>
             }
         </div>;
     }

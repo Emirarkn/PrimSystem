@@ -1,0 +1,37 @@
+@* Yüzde halkası (SVG donut). Percent 0-100; ChildContent yoksa yüzde yazılır. *@
+@{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var r = (Size - Stroke) / 2.0;
+    var c = 2 * Math.PI * r;
+    var pct = Math.Clamp(Percent, 0, 100);
+    var dash = (pct / 100.0) * c;
+    var mid = (Size / 2.0).ToString("F1", inv);
+}
+<div class="p-ring" style="width:@(Size)px;height:@(Size)px" role="img" aria-label="@AriaLabel">
+    <svg width="@Size" height="@Size" viewBox="0 0 @Size @Size" aria-hidden="true">
+        <circle cx="@mid" cy="@mid" r="@r.ToString("F2", inv)" fill="none" stroke="@Track" stroke-width="@Stroke"/>
+        <circle cx="@mid" cy="@mid" r="@r.ToString("F2", inv)" fill="none" stroke="@Color" stroke-width="@Stroke" stroke-linecap="round"
+                stroke-dasharray="@dash.ToString("F2", inv) @c.ToString("F2", inv)"
+                transform="rotate(-90 @mid @mid)"/>
+    </svg>
+    <div class="p-ring__text">
+        @if (ChildContent != null)
+        {
+            @ChildContent
+        }
+        else
+        {
+            <span>%@pct.ToString("F0")</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public double Percent { get; set; }
+    [Parameter] public int Size { get; set; } = 84;
+    [Parameter] public int Stroke { get; set; } = 10;
+    [Parameter] public string Color { get; set; } = "var(--brand)";
+    [Parameter] public string Track { get; set; } = "rgba(10,107,102,.15)";
+    [Parameter] public string AriaLabel { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

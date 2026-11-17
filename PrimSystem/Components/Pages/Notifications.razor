@@ -18,18 +18,18 @@
     return;
 }
 
-<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+<div style="min-height:100vh;background:var(--bg-base);font-family:Segoe UI,sans-serif">
 
     <div style="max-width:900px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px">
 
         <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
-                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Bildirimler</div>
-                <div style="font-size:11px;color:#475569">@(unreadCount > 0 ? $"{unreadCount} okunmamis" : "Tumu okundu")</div>
+                <div style="font-size:18px;font-weight:700;color:var(--text)">Bildirimler</div>
+                <div style="font-size:11px;color:var(--text-ghost)">@(unreadCount > 0 ? $"{unreadCount} okunmamis" : "Tumu okundu")</div>
             </div>
             @if (unreadCount > 0)
             {
-                <button @onclick="MarkAll" style="padding:7px 14px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+                <button @onclick="MarkAll" style="padding:7px 14px;background:rgba(42,106,158,0.12);color:var(--info);border:1px solid rgba(42,106,158,0.25);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
                     Tumunu Okundu Isaretle
                 </button>
             }
@@ -38,11 +38,11 @@
         <!-- BİLDİRİM GÖNDER (Admin / BM / Yönetici) -->
         @if (Session.CanSendNotification)
         {
-            <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:@(showSendPanel ? "16px" : "0")">
-                    <div style="font-size:14px;font-weight:700;color:#f1f5f9">Bildirim Gönder</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text)">Bildirim Gönder</div>
                     <button @onclick="() => showSendPanel = !showSendPanel"
-                            style="padding:5px 12px;background:rgba(59,130,246,0.12);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
+                            style="padding:5px 12px;background:rgba(42,106,158,0.12);color:var(--info);border:1px solid rgba(42,106,158,0.25);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">
                         @(showSendPanel ? "Kapat" : "+ Yeni")
                     </button>
                 </div>
@@ -51,8 +51,8 @@
                 {
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
                         <div>
-                            <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Alıcı</label>
-                            <select @bind="sendTarget" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Alıcı</label>
+                            <select @bind="sendTarget" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px">
                                 @if (Session.IsAdmin)
                                 {
                                     <option value="role_4">Tüm ST'ler</option>
@@ -85,8 +85,8 @@
                             </select>
                         </div>
                         <div>
-                            <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Tür</label>
-                            <select @bind="sendType" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                            <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Tür</label>
+                            <select @bind="sendType" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px">
                                 <option value="Info">ℹ Bilgi</option>
                                 <option value="Success">✓ Başarı</option>
                                 <option value="Warning">⚠ Uyarı</option>
@@ -96,29 +96,29 @@
                     </div>
 
                     <div style="margin-bottom:10px">
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Başlık</label>
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Başlık</label>
                         <input @bind="sendTitle" placeholder="Bildirim başlığı..."
-                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none" />
+                               style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;outline:none" />
                     </div>
 
                     <div style="margin-bottom:12px">
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Mesaj (opsiyonel)</label>
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Mesaj (opsiyonel)</label>
                         <textarea @bind="sendMessage" rows="2" placeholder="Detay mesajı..."
-                                  style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box;resize:vertical;outline:none;font-family:inherit"></textarea>
+                                  style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical;outline:none;font-family:inherit"></textarea>
                     </div>
 
                     @if (!string.IsNullOrEmpty(sendError))
                     {
-                        <div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:7px 11px;margin-bottom:10px;color:#ef4444;font-size:12px">@sendError</div>
+                        <div style="background:rgba(181,65,58,0.1);border-radius:6px;padding:7px 11px;margin-bottom:10px;color:var(--danger);font-size:12px">@sendError</div>
                     }
                     @if (!string.IsNullOrEmpty(sendSuccess))
                     {
-                        <div style="background:rgba(16,185,129,0.1);border-radius:6px;padding:7px 11px;margin-bottom:10px;color:#10b981;font-size:12px">@sendSuccess</div>
+                        <div style="background:rgba(10,107,102,0.1);border-radius:6px;padding:7px 11px;margin-bottom:10px;color:var(--accent);font-size:12px">@sendSuccess</div>
                     }
 
                     <div style="display:flex;justify-content:flex-end">
                         <button @onclick="DoSend" disabled="@isSending"
-                                style="padding:8px 20px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+                                style="padding:8px 20px;background:var(--info);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
                             @(isSending ? "Gönderiliyor..." : "Gönder")
                         </button>
                     </div>
@@ -127,13 +127,13 @@
         }
 
         <!-- BİLDİRİM LİSTESİ -->
-        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
             @if (!notifications.Any())
             {
                 <div style="padding:48px;text-align:center">
                     <div style="font-size:36px;margin-bottom:12px">🔔</div>
-                    <div style="font-size:15px;font-weight:600;color:#f1f5f9;margin-bottom:4px">Bildirim Yok</div>
-                    <div style="font-size:13px;color:#64748b">Henüz bir bildirim almadınız.</div>
+                    <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Bildirim Yok</div>
+                    <div style="font-size:13px;color:var(--text-faint)">Henüz bir bildirim almadınız.</div>
                 </div>
             }
             else
@@ -141,10 +141,10 @@
                 @foreach (var n in notifications)
                 {
                     var typeColor = n.Type switch {
-                        "Success" => "#10b981",
-                        "Warning" => "#f59e0b",
-                        "Error"   => "#ef4444",
-                        _         => "#3b82f6"
+                        "Success" => "var(--accent)",
+                        "Warning" => "var(--warning)",
+                        "Error"   => "var(--danger)",
+                        _         => "var(--info)"
                     };
                     var typeLabel = n.Type switch {
                         "Success" => "Başarı",
@@ -154,26 +154,26 @@
                     };
                     <div @key="n.NotifId"
                          @onclick="() => MarkRead(n)"
-                         style="padding:14px 18px;border-bottom:1px solid #1e293b;cursor:pointer;background:@(n.IsRead ? "transparent" : "#0d1a2d");display:flex;gap:14px;align-items:flex-start">
+                         style="padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;background:@(n.IsRead ? "transparent" : "var(--bg-elevated)");display:flex;gap:14px;align-items:flex-start">
                         <div style="width:8px;height:8px;border-radius:50%;background:@typeColor;margin-top:6px;flex-shrink:0;opacity:@(n.IsRead ? "0.25" : "1")"></div>
                         <div style="flex:1;min-width:0">
                             <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap">
-                                <span style="font-size:13px;font-weight:@(n.IsRead ? "400" : "600");color:@(n.IsRead ? "#94a3b8" : "#f1f5f9")">@n.Title</span>
+                                <span style="font-size:13px;font-weight:@(n.IsRead ? "400" : "600");color:@(n.IsRead ? "var(--text-dim)" : "var(--text)")">@n.Title</span>
                                 <span style="padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600;background:@(typeColor)22;color:@typeColor;border:1px solid @(typeColor)33">@typeLabel</span>
                                 @if (!n.IsRead)
                                 {
-                                    <span style="padding:1px 7px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(59,130,246,0.12);color:#3b82f6">YENİ</span>
+                                    <span style="padding:1px 7px;border-radius:999px;font-size:9px;font-weight:700;background:rgba(42,106,158,0.12);color:var(--info)">YENİ</span>
                                 }
                             </div>
                             @if (!string.IsNullOrEmpty(n.Message))
                             {
-                                <div style="font-size:12px;color:#64748b;margin-bottom:3px">@n.Message</div>
+                                <div style="font-size:12px;color:var(--text-faint);margin-bottom:3px">@n.Message</div>
                             }
-                            <div style="font-size:10px;color:#475569">@TimeAgo(n.CreatedAt)</div>
+                            <div style="font-size:10px;color:var(--text-ghost)">@TimeAgo(n.CreatedAt)</div>
                         </div>
                         @if (!n.IsRead)
                         {
-                            <div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-top:6px"></div>
+                            <div style="width:8px;height:8px;border-radius:50%;background:var(--info);flex-shrink:0;margin-top:6px"></div>
                         }
                     </div>
                 }

@@ -1,0 +1,31 @@
+@* Sıralama listesi: madalyalı ilk üç, teal gradient çubuk, yüzde etiketi, 0-100 ekseni. *@
+<div role="list" aria-label="@AriaLabel">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var it = Items[i];
+        var w = Math.Clamp(it.Value, 0, 100).ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+        <div class="p-rank" role="listitem">
+            <span class="p-rank__no @(i < 3 ? "p-rank__no--" + (i + 1) : "")">@(i + 1)</span>
+            <span class="p-rank__name" title="@it.Name">@it.Name</span>
+            <div class="p-rank__track"><div class="p-rank__bar @(it.Passed ? "" : "p-rank__bar--fail")" style="width:@(w)%"></div></div>
+            <span class="p-rank__val">%@it.Value.ToString("F1")</span>
+        </div>
+    }
+    <div class="p-axis" aria-hidden="true">
+        <span></span><span></span>
+        <div class="p-axis__ticks"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+        <span></span>
+    </div>
+    @if (!string.IsNullOrEmpty(AxisLabel))
+    {
+        <div style="margin-top:2px;text-align:center;font-size:11px;color:var(--text-dim)">@AxisLabel</div>
+    }
+</div>
+
+@code {
+    public record Item(string Name, double Value, bool Passed = true);
+
+    [Parameter, EditorRequired] public List<Item> Items { get; set; } = new();
+    [Parameter] public string AxisLabel { get; set; } = "";
+    [Parameter] public string AriaLabel { get; set; } = "Sıralama";
+}

@@ -21,17 +21,17 @@
         if (r.Score.HasValue)
         {
             var pct = r.Score.Value * 100;
-            var barColor = r.Score.Value >= 0.85m ? "#10b981" : r.Score.Value >= 0.70m ? "#f59e0b" : "#ef4444";
+            var barColor = r.Score.Value >= 0.85m ? "var(--accent)" : r.Score.Value >= 0.70m ? "var(--warning)" : "var(--danger)";
             // Bar genişliği 0–105 ölçeğinde (cap); CSS için invariant format şart
             var width = (Math.Clamp((double)r.Score.Value, 0, 1.05) / 1.05 * 100).ToString("F1", CultureInfo.InvariantCulture);
             <div>
                 <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-                    <span style="font-size:11px;color:#94a3b8;font-weight:600">@r.Label
-                        <span style="font-size:9px;color:#475569;font-weight:500">· ağırlık %@r.Weight</span>
+                    <span style="font-size:11px;color:var(--text-dim);font-weight:600">@r.Label
+                        <span style="font-size:9px;color:var(--text-ghost);font-weight:500">· ağırlık %@r.Weight</span>
                     </span>
                     <span style="font-size:12px;font-family:monospace;font-weight:700;color:@barColor">%@pct.ToString("F1")</span>
                 </div>
-                <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+                <div style="height:5px;background:rgba(18,65,62,0.06);border-radius:3px;overflow:hidden">
                     <div style="height:100%;width:@(width)%;background:linear-gradient(90deg,@barColor,@(barColor)99);border-radius:3px;transition:width 0.8s ease"></div>
                 </div>
             </div>
@@ -40,12 +40,12 @@
         {
             <div style="opacity:0.45">
                 <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-                    <span style="font-size:11px;color:#94a3b8;font-weight:600">@r.Label
-                        <span style="font-size:9px;color:#475569;font-weight:500">· ağırlık %@r.Weight</span>
+                    <span style="font-size:11px;color:var(--text-dim);font-weight:600">@r.Label
+                        <span style="font-size:9px;color:var(--text-ghost);font-weight:500">· ağırlık %@r.Weight</span>
                     </span>
-                    <span style="font-size:12px;font-family:monospace;color:#64748b">—</span>
+                    <span style="font-size:12px;font-family:monospace;color:var(--text-faint)">—</span>
                 </div>
-                <div style="height:5px;background:rgba(255,255,255,0.04);border-radius:3px"></div>
+                <div style="height:5px;background:rgba(18,65,62,0.04);border-radius:3px"></div>
             </div>
         }
     }

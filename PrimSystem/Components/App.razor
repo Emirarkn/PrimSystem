@@ -1,11 +1,15 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿@inject IWebHostEnvironment Env
+<!DOCTYPE html>
+<html lang="tr">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="only light" />
+    <meta name="darkreader-lock" />
     <base href="/" />
-    <link rel="stylesheet" href="app.css" />
+    @* app.css adresine dosya sürümü eklenir: aksi halde tarayıcı eski CSS'i önbellekten kullanıp yeni arayüzü eski/bozuk gösterebiliyor. *@
+    <link rel="stylesheet" href="app.css?v=@AssetVersion("app.css")" />
     <link rel="stylesheet" href="PrimSystem.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <title>Prim Yönetim Sistemi</title>
@@ -13,7 +17,30 @@
 </head>
 
 <body>
+    @* Açılış ekranı: Blazor bağlanana kadar (prerender kapalı olduğu için sayfa boş kalırdı) animasyonlu logo.
+       Uygulama içeriği DOM'a gelince aşağıdaki betik bunu kaldırır. Zemin GIF'in kremiyle aynı. *@
+    <div id="boot-splash" role="status" aria-label="Yükleniyor" style="position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#faf7f1;font-family:Segoe UI,sans-serif">
+        <picture>
+            <source media="(prefers-reduced-motion: reduce)" srcset="/images/prim-symbol.png" />
+            <img src="/images/waiting.gif" alt="" width="160" height="160" style="display:block;object-fit:contain" />
+        </picture>
+        <p style="margin:4px 0 0;color:#3e5b58;font-size:14px;font-weight:600">Yükleniyor…</p>
+    </div>
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
+    <script>
+        (function () {
+            var splash = document.getElementById('boot-splash');
+            if (!splash) return;
+            function ready() {
+                return !!document.body.querySelector(':scope > :not(#boot-splash):not(script):not(#blazor-error-ui):not(link):not(style)');
+            }
+            function hide() { if (splash.parentNode) splash.parentNode.removeChild(splash); }
+            if (ready()) { hide(); return; }
+            var mo = new MutationObserver(function () { if (ready()) { mo.disconnect(); hide(); } });
+            mo.observe(document.body, { childList: true });
+            setTimeout(hide, 30000); // bağlantı hiç kurulamazsa ekran sonsuza dek kalmasın
+        })();
+    </script>
     <script src="_framework/blazor.web.js"></script>
     @* Chart.js 4.4.0 — YEREL. Daha önce cdn.jsdelivr.net'ten yükleniyordu; dışarı kapalı
        kurumsal ağda tüm grafikler SESSİZCE boş kalıyordu (çağıran kod `if (typeof Chart ===
@@ -23,7 +50,16 @@
        Sürüm yükseltilirken bu hash yeniden hesaplanıp buraya yazılmalı. Aynı origin'den
        geldiği için integrity/crossorigin özniteliklerine gerek yok. *@
     <script src="lib/chart.umd.min.js"></script>
-    <script src="fileUpload.js"></script>
+    <script src="fileUpload.js?v=@AssetVersion("fileUpload.js")"></script>
 </body>
 
 </html>
+
+@code {
+    // wwwroot dosyasının son yazılma zamanı: dosya değişince adres değişir, tarayıcı yenisini çeker.
+    private string AssetVersion(string file)
+    {
+        try { return File.GetLastWriteTimeUtc(Path.Combine(Env.WebRootPath, file)).Ticks.ToString("x"); }
+        catch { return "0"; }
+    }
+}

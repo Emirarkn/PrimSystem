@@ -1,0 +1,13 @@
+@* Amber uyarı bandı (taslaktaki sıcak uyarı kutusu). *@
+<div class="p-alert" role="status">
+    <div class="p-alert__body">@ChildContent</div>
+    @if (Actions != null)
+    {
+        <div class="p-alert__actions">@Actions</div>
+    }
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+}
