@@ -23,71 +23,71 @@
     return;
 }
 
-<div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+<div style="min-height:100vh;background:var(--bg-base);font-family:Segoe UI,sans-serif">
 
     <div style="max-width:1200px;margin:0 auto;padding:20px">
 
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
             <div>
-                <div style="font-size:18px;font-weight:700;color:#f1f5f9">Scorecard Yonetimi</div>
-                <div style="font-size:11px;color:#475569">Urun agirliklari ve prim yapilandirmasi</div>
+                <div style="font-size:18px;font-weight:700;color:var(--text)">Scorecard Yonetimi</div>
+                <div style="font-size:11px;color:var(--text-ghost)">Urun agirliklari ve prim yapilandirmasi</div>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
-                <span style="padding:4px 12px;border-radius:8px;font-size:12px;font-weight:700;background:@(totalWeight == 100 ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)");color:@(totalWeight == 100 ? "#10b981" : "#ef4444");border:1px solid @(totalWeight == 100 ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)")">
+                <span style="padding:4px 12px;border-radius:8px;font-size:12px;font-weight:700;background:@(totalWeight == 100 ? "rgba(10,107,102,0.15)" : "rgba(181,65,58,0.15)");color:@(totalWeight == 100 ? "var(--accent)" : "var(--danger)");border:1px solid @(totalWeight == 100 ? "rgba(10,107,102,0.3)" : "rgba(181,65,58,0.3)")">
                     Toplam: @totalWeight/100
                 </span>
                 @if (Session.CanManage)
                 {
-                    <button @onclick="ShowAddDialog" style="padding:7px 15px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">+ Urun Ekle</button>
+                    <button @onclick="ShowAddDialog" style="padding:7px 15px;background:var(--info);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">+ Urun Ekle</button>
                 }
             </div>
         </div>
 
         <!-- AKTİFLE: tek tıkla Yeniden Hesapla + Yayınla (ağırlık değişikliklerini canlıya alır) -->
-        <div style="background:#111827;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
-            <span style="font-size:12px;font-weight:700;color:#f1f5f9">⚡ Değişiklikleri Aktifle</span>
-            <select @bind="activateYear" disabled="@isActivating" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+        <div style="background:var(--bg-card);border:1px solid rgba(42,106,158,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+            <span style="font-size:12px;font-weight:700;color:var(--text)">⚡ Değişiklikleri Aktifle</span>
+            <select @bind="activateYear" disabled="@isActivating" style="padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                 @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
                 {
                     <option value="@y">@y</option>
                 }
             </select>
-            <select @bind="activateQuarter" disabled="@isActivating" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+            <select @bind="activateQuarter" disabled="@isActivating" style="padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                 <option value="Q1">Q1</option>
                 <option value="Q2">Q2</option>
                 <option value="Q3">Q3</option>
                 <option value="Q4">Q4</option>
             </select>
             <button @onclick="StartActivate" disabled="@isActivating"
-                    style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
+                    style="padding:7px 16px;background:var(--info);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
                 @(isActivating ? "⏳ Aktifleniyor..." : "⚡ Aktifle (Yeniden Hesapla + Yayınla)")
             </button>
-            <span style="color:#64748b;font-size:11px;margin-left:auto">Ağırlık değişiklikleri yalnız yeniden hesaplanıp yayınlandığında rapor/prim ekranlarına yansır.</span>
+            <span style="color:var(--text-faint);font-size:11px;margin-left:auto">Ağırlık değişiklikleri yalnız yeniden hesaplanıp yayınlandığında rapor/prim ekranlarına yansır.</span>
         </div>
 
         @if (showActivateConfirm)
         {
-            <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px;margin-bottom:14px">
+            <div style="background:rgba(181,65,58,0.08);border:1px solid rgba(181,65,58,0.35);border-radius:10px;padding:14px;margin-bottom:14px">
                 @if (activateIssues.Any())
                 {
-                    <div style="font-size:12.5px;font-weight:700;color:#ef4444;margin-bottom:6px">⚠ Veri eksik — sonuç yanıltıcı olabilir:</div>
-                    <div style="font-size:11.5px;color:#f59e0b;margin-bottom:10px;display:flex;flex-direction:column;gap:3px">
+                    <div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:6px">⚠ Veri eksik — sonuç yanıltıcı olabilir:</div>
+                    <div style="font-size:11.5px;color:var(--warning);margin-bottom:10px;display:flex;flex-direction:column;gap:3px">
                         @foreach (var iss in activateIssues)
                         {
                             <div>• @iss</div>
                         }
                     </div>
                 }
-                <div style="font-size:12.5px;color:#f1f5f9;margin-bottom:10px">
+                <div style="font-size:12.5px;color:var(--text);margin-bottom:10px">
                     <strong>@activateQuarter @activateYear</strong> yeniden hesaplanıp <strong>yayınlanacak</strong>; ST'lere bildirim gidecek. Onaylıyor musun?
                 </div>
                 <div style="display:flex;gap:8px">
                     <button @onclick="ConfirmActivate" disabled="@isActivating"
-                            style="padding:7px 16px;background:#3b82f6;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
+                            style="padding:7px 16px;background:var(--info);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">
                         ⚡ Evet, Aktifle
                     </button>
                     <button @onclick="() => { showActivateConfirm = false; }" disabled="@isActivating"
-                            style="padding:7px 16px;background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:7px;font-size:12px;cursor:pointer">
+                            style="padding:7px 16px;background:rgba(98,119,116,0.12);color:var(--text-dim);border:1px solid rgba(98,119,116,0.3);border-radius:7px;font-size:12px;cursor:pointer">
                         Vazgeç
                     </button>
                 </div>
@@ -96,10 +96,10 @@
 
         <!-- KPI KRİTERLERİ -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-            <span style="font-size:11px;color:#64748b;font-weight:600">KPI AĞIRLIKLARI · @viewYear</span>
+            <span style="font-size:11px;color:var(--text-faint);font-weight:600">KPI AĞIRLIKLARI · @viewYear</span>
             @if (kpiYearFallback)
             {
-                <span style="padding:3px 10px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:11px;color:#f59e0b">
+                <span style="padding:3px 10px;background:rgba(217,148,40,0.12);border:1px solid rgba(217,148,40,0.3);border-radius:6px;font-size:11px;color:var(--warning)">
                     @viewYear için tanım yok — önceki yılın değerleri gösteriliyor; kaydedince @viewYear için oluşturulur
                 </span>
             }
@@ -107,29 +107,29 @@
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
             @foreach (var k in kpiList)
             {
-                <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;position:relative">
-                    <div style="font-size:10px;color:#64748b;margin-bottom:2px">@k.Name</div>
-                    <span style="font-size:22px;font-weight:700;color:#3b82f6">%@k.Weight</span>
-                    <span style="font-size:10px;color:#64748b;margin-left:6px">min %@k.MinRate</span>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;position:relative">
+                    <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">@k.Name</div>
+                    <span style="font-size:22px;font-weight:700;color:var(--info)">%@k.Weight</span>
+                    <span style="font-size:10px;color:var(--text-faint);margin-left:6px">min %@k.MinRate</span>
                     @if (Session.CanManage)
                     {
                         <button @onclick="() => StartEditKpi(k)"
-                                style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;color:#64748b;font-size:12px;padding:2px 4px;border-radius:4px">✏️</button>
+                                style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:12px;padding:2px 4px;border-radius:4px">✏️</button>
                     }
                 </div>
             }
         </div>
 
         <!-- DÖNEM SEÇİCİ -->
-        <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span style="font-size:11px;color:#64748b;font-weight:600">GÖRÜNTÜLEME/DÜZENLEME DÖNEMİ</span>
-            <select @bind="viewYear" @bind:after="LoadData" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--text-faint);font-weight:600">GÖRÜNTÜLEME/DÜZENLEME DÖNEMİ</span>
+            <select @bind="viewYear" @bind:after="LoadData" style="padding:5px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                 @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
                 {
                     <option value="@y">@y</option>
                 }
             </select>
-            <select @bind="viewQuarter" @bind:after="LoadData" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+            <select @bind="viewQuarter" @bind:after="LoadData" style="padding:5px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                 <option value="ALL">Genel (aktif)</option>
                 <option value="Q1">Q1 (Oca-Mar)</option>
                 <option value="Q2">Q2 (Nis-Haz)</option>
@@ -138,21 +138,21 @@
             </select>
             @if (viewQuarter != "ALL")
             {
-                <span style="padding:3px 10px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:6px;font-size:11px;color:#3b82f6">
+                <span style="padding:3px 10px;background:rgba(42,106,158,0.12);border:1px solid rgba(42,106,158,0.3);border-radius:6px;font-size:11px;color:var(--info)">
                     @viewYear @viewQuarter başındaki ağırlıklar gösteriliyor
                 </span>
             }
             @if (Session.CanManage)
             {
                 <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-                    <span style="font-size:11px;color:#64748b">Değişiklik geçerlilik:</span>
-                    <select @bind="applyYear" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    <span style="font-size:11px;color:var(--text-faint)">Değişiklik geçerlilik:</span>
+                    <select @bind="applyYear" style="padding:5px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                         @for (int y = DateTime.Now.Year + 1; y >= DateTime.Now.Year - 2; y--)
                         {
                             <option value="@y">@y</option>
                         }
                     </select>
-                    <select @bind="applyQuarter" style="padding:5px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    <select @bind="applyQuarter" style="padding:5px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                         <option value="ALL">Geriye dönük (tümünü güncelle)</option>
                         <option value="Q1">Q1'dan itibaren</option>
                         <option value="Q2">Q2'den itibaren</option>
@@ -166,25 +166,25 @@
         <!-- MESAJ -->
         @if (!string.IsNullOrEmpty(message))
         {
-            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#10b981;font-size:13px">
+            <div style="background:rgba(10,107,102,0.1);border:1px solid rgba(10,107,102,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:var(--accent);font-size:13px">
                 @message
             </div>
         }
 
         <!-- ÜRÜN TABLOSU -->
-        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;overflow:hidden">
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
             <table style="width:100%;border-collapse:collapse;font-size:13px">
                 <thead>
-                    <tr style="background:#171f2e">
-                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">ÜRÜN GRUBU</th>
-                        <th style="padding:10px 14px;text-align:left;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">ÜRÜN</th>
-                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">AĞIRLIK</th>
-                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">MAX PUAN</th>
-                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">MİN %</th>
-                        <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">PRİM</th>
+                    <tr style="background:var(--bg-elevated)">
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">ÜRÜN GRUBU</th>
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">ÜRÜN</th>
+                        <th style="padding:10px 14px;text-align:center;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">AĞIRLIK</th>
+                        <th style="padding:10px 14px;text-align:center;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">MAX PUAN</th>
+                        <th style="padding:10px 14px;text-align:center;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">MİN %</th>
+                        <th style="padding:10px 14px;text-align:center;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">PRİM</th>
                         @if (Session.CanManage)
                         {
-                            <th style="padding:10px 14px;text-align:center;color:#64748b;font-weight:600;font-size:11px;border-bottom:1px solid #1e293b">İŞLEM</th>
+                            <th style="padding:10px 14px;text-align:center;color:var(--text-faint);font-weight:600;font-size:11px;border-bottom:1px solid var(--border)">İŞLEM</th>
                         }
                     </tr>
                 </thead>
@@ -194,33 +194,33 @@
                         var w = weights.FirstOrDefault(x => x.ProductId == p.ProductId);
                         var weightVal = w?.Weight ?? 0;
                         var isOTC = p.ProductGroup == "OTC";
-                        <tr @key="p.ProductId" style="border-bottom:1px solid #1e293b;opacity:@(p.IsPrimEligible ? "1" : "0.45")">
+                        <tr @key="p.ProductId" style="border-bottom:1px solid var(--border);opacity:@(p.IsPrimEligible ? "1" : "0.45")">
                             <td style="padding:9px 14px">
                                 @if (Session.CanManage && editingId == p.ProductId)
                                 {
-                                    <select @bind="editGroup" style="background:#0a0f1a;color:@(editGroup == "OTC" ? "#10b981" : "#f59e0b");border:1px solid #1e293b;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700">
+                                    <select @bind="editGroup" style="background:var(--bg-base);color:@(editGroup == "OTC" ? "var(--accent)" : "var(--warning)");border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700">
                                         <option value="OTC">OTC</option>
                                         <option value="ITR">ITR</option>
                                     </select>
                                 }
                                 else
                                 {
-                                    <span style="padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:@(isOTC ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)");color:@(isOTC ? "#10b981" : "#f59e0b");border:1px solid @(isOTC ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)")">@p.ProductGroup</span>
+                                    <span style="padding:2px 9px;border-radius:5px;font-size:11px;font-weight:700;background:@(isOTC ? "rgba(10,107,102,0.12)" : "rgba(217,148,40,0.12)");color:@(isOTC ? "var(--accent)" : "var(--warning)");border:1px solid @(isOTC ? "rgba(10,107,102,0.3)" : "rgba(217,148,40,0.3)")">@p.ProductGroup</span>
                                 }
                             </td>
-                            <td style="padding:9px 14px;color:#f1f5f9;font-weight:500">
+                            <td style="padding:9px 14px;color:var(--text);font-weight:500">
                                 @p.Name
                                 @if (Session.CanManage && editingId == p.ProductId)
                                 {
                                     <div style="margin-top:5px">
                                         <input @bind="editAlias" @bind:event="oninput" placeholder="InfiniLens marka adı; çoklu için ; ile ayır"
-                                               style="width:100%;max-width:320px;background:#0a0f1a;color:#cbd5e1;border:1px solid #1e293b;border-radius:5px;padding:4px 8px;font-size:11px" />
-                                        <div style="font-size:9px;color:#475569;margin-top:2px">Sell-out/sipariş eşleşmesi. Örn: JOHNSON'S BABY;NEUTROGENA;CAREFREE</div>
+                                               style="width:100%;max-width:320px;background:var(--bg-base);color:var(--text-muted);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:11px" />
+                                        <div style="font-size:9px;color:var(--text-ghost);margin-top:2px">Sell-out/sipariş eşleşmesi. Örn: JOHNSON'S BABY;NEUTROGENA;CAREFREE</div>
                                     </div>
                                 }
                                 else if (!string.IsNullOrEmpty(p.ImportAlias) && p.ImportAlias != p.Name)
                                 {
-                                    <span style="font-size:10px;color:#64748b;margin-left:6px">(InfiniLens: @p.ImportAlias)</span>
+                                    <span style="font-size:10px;color:var(--text-faint);margin-left:6px">(InfiniLens: @p.ImportAlias)</span>
                                 }
                             </td>
                             <td style="padding:9px 14px;text-align:center">
@@ -229,21 +229,21 @@
                                     @* @bind:event="oninput" ŞART: varsayılan `change` yalnız odak kaybında
                                        tetiklenir; kullanıcı değeri yazıp doğrudan ✓'e tıklayınca click,
                                        change'den önce işlenip ESKİ değer kaydediliyordu. *@
-                                    <input type="number" min="0" max="100" @bind="editWeight" @bind:event="oninput" style="width:50px;text-align:center;background:#0a0f1a;color:#f1f5f9;border:1px solid #1e293b;border-radius:5px;padding:3px 6px;font-size:13px;font-weight:600" />
+                                    <input type="number" min="0" max="100" @bind="editWeight" @bind:event="oninput" style="width:50px;text-align:center;background:var(--bg-base);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:3px 6px;font-size:13px;font-weight:600" />
                                 }
                                 else
                                 {
-                                    <span style="font-weight:600;color:#f1f5f9">@weightVal</span>
+                                    <span style="font-weight:600;color:var(--text)">@weightVal</span>
                                 }
                             </td>
-                            <td style="padding:9px 14px;text-align:center;color:#94a3b8;font-family:monospace;font-size:12px">
+                            <td style="padding:9px 14px;text-align:center;color:var(--text-dim);font-family:monospace;font-size:12px">
                                 @(p.IsPrimEligible && weightVal > 0 ? ((weightVal + 5.0) / 100).ToString("F2") : "—")
                             </td>
-                            <td style="padding:9px 14px;text-align:center;color:#94a3b8;font-size:11px">
+                            <td style="padding:9px 14px;text-align:center;color:var(--text-dim);font-size:11px">
                                 @if (Session.CanManage && editingId == p.ProductId)
                                 {
-                                    <input type="number" min="0" max="100" @bind="editMinRatePct" @bind:event="oninput" style="width:52px;text-align:center;background:#0a0f1a;color:#f1f5f9;border:1px solid #1e293b;border-radius:5px;padding:3px 6px;font-size:12px" />
-                                    <span style="font-size:10px;color:#64748b;margin-left:2px">%</span>
+                                    <input type="number" min="0" max="100" @bind="editMinRatePct" @bind:event="oninput" style="width:52px;text-align:center;background:var(--bg-base);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:3px 6px;font-size:12px" />
+                                    <span style="font-size:10px;color:var(--text-faint);margin-left:2px">%</span>
                                 }
                                 else
                                 {
@@ -253,13 +253,13 @@
                             <td style="padding:9px 14px;text-align:center">
                                 @if (Session.CanManage && editingId == p.ProductId)
                                 {
-                                    <button @onclick="() => TogglePrim(p)" style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;background:@(editPrim ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(editPrim ? "#10b981" : "#ef4444");border:1px solid @(editPrim ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)")">
+                                    <button @onclick="() => TogglePrim(p)" style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;background:@(editPrim ? "rgba(10,107,102,0.12)" : "rgba(181,65,58,0.1)");color:@(editPrim ? "var(--accent)" : "var(--danger)");border:1px solid @(editPrim ? "rgba(10,107,102,0.3)" : "rgba(181,65,58,0.3)")">
                                         @(editPrim ? "Evet" : "Hayır")
                                     </button>
                                 }
                                 else
                                 {
-                                    <span style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:@(p.IsPrimEligible ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(p.IsPrimEligible ? "#10b981" : "#ef4444")">
+                                    <span style="padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:@(p.IsPrimEligible ? "rgba(10,107,102,0.12)" : "rgba(181,65,58,0.1)");color:@(p.IsPrimEligible ? "var(--accent)" : "var(--danger)")">
                                         @(p.IsPrimEligible ? "Evet" : "Hayır")
                                     </span>
                                 }
@@ -269,19 +269,19 @@
                                 <td style="padding:9px 14px;text-align:center">
                                     @if (editingId == p.ProductId)
                                     {
-                                        <button @onclick="RequestSave" style="background:none;border:none;cursor:pointer;color:#10b981;font-size:14px;margin-right:4px" title="Kaydet">✓</button>
-                                        <button @onclick="CancelEdit" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:14px" title="İptal">✗</button>
+                                        <button @onclick="RequestSave" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;margin-right:4px" title="Kaydet">✓</button>
+                                        <button @onclick="CancelEdit" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px" title="İptal">✗</button>
                                     }
                                     else if (confirmDeleteProductId == p.ProductId)
                                     {
-                                        <button @onclick="() => ConfirmDeleteProduct(p)" style="padding:3px 10px;background:#ef4444;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Sil</button>
-                                        <button @onclick="() => confirmDeleteProductId = 0" style="padding:3px 10px;background:rgba(100,116,139,0.12);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);border-radius:6px;font-size:11px;cursor:pointer">Vazgeç</button>
+                                        <button @onclick="() => ConfirmDeleteProduct(p)" style="padding:3px 10px;background:var(--danger);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Sil</button>
+                                        <button @onclick="() => confirmDeleteProductId = 0" style="padding:3px 10px;background:rgba(98,119,116,0.12);color:var(--text-dim);border:1px solid rgba(98,119,116,0.3);border-radius:6px;font-size:11px;cursor:pointer">Vazgeç</button>
                                     }
                                     else
                                     {
-                                        <button @onclick="() => StartEdit(p, w)" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;margin-right:4px">✏️</button>
-                                        <button @onclick="() => expandedProductId = (expandedProductId == p.ProductId ? 0 : p.ProductId)" style="background:none;border:none;cursor:pointer;color:@(expandedProductId == p.ProductId ? "#3b82f6" : "#64748b");font-size:12px;margin-right:4px" title="Versiyon Geçmişi">📋</button>
-                                        <button @onclick="() => confirmDeleteProductId = p.ProductId" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:13px" title="Ürünü prim hesabından çıkar">🗑️</button>
+                                        <button @onclick="() => StartEdit(p, w)" style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:13px;margin-right:4px">✏️</button>
+                                        <button @onclick="() => expandedProductId = (expandedProductId == p.ProductId ? 0 : p.ProductId)" style="background:none;border:none;cursor:pointer;color:@(expandedProductId == p.ProductId ? "var(--info)" : "var(--text-faint)");font-size:12px;margin-right:4px" title="Versiyon Geçmişi">📋</button>
+                                        <button @onclick="() => confirmDeleteProductId = p.ProductId" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:13px" title="Ürünü prim hesabından çıkar">🗑️</button>
                                     }
                                 </td>
                             }
@@ -290,20 +290,20 @@
                         @if (confirmDeleteProductId == p.ProductId)
                         {
                             <tr>
-                                <td colspan="@(Session.CanManage ? 7 : 6)" style="padding:10px 14px;background:rgba(239,68,68,0.08);border-bottom:1px solid rgba(239,68,68,0.3)">
-                                    <div style="font-size:12px;color:#f1f5f9">
+                                <td colspan="@(Session.CanManage ? 7 : 6)" style="padding:10px 14px;background:rgba(181,65,58,0.08);border-bottom:1px solid rgba(181,65,58,0.3)">
+                                    <div style="font-size:12px;color:var(--text)">
                                         <strong>@p.Name</strong> prim hesabından çıkarılacak.
                                         @if (p.IsPrimEligible && weightVal > 0)
                                         {
-                                            <span style="color:#ef4444;font-weight:700">
+                                            <span style="color:var(--danger);font-weight:700">
                                                 Toplam ağırlık @totalWeight → @(totalWeight - weightVal) olacak; tüm skorlar düşer.
                                             </span>
                                         }
                                         else
                                         {
-                                            <span style="color:#94a3b8">Ağırlığı @weightVal olduğu için toplam ağırlık değişmez (@totalWeight).</span>
+                                            <span style="color:var(--text-dim)">Ağırlığı @weightVal olduğu için toplam ağırlık değişmez (@totalWeight).</span>
                                         }
-                                        <span style="color:#64748b"> Yansıması için sonra ⚡ Aktifle kullanın.</span>
+                                        <span style="color:var(--text-faint)"> Yansıması için sonra ⚡ Aktifle kullanın.</span>
                                     </div>
                                 </td>
                             </tr>
@@ -316,12 +316,12 @@
                                 .OrderByDescending(h => h.ValidFrom)
                                 .ToList();
                             <tr>
-                                <td colspan="@(Session.CanManage ? 7 : 6)" style="padding:0;background:#0a0f1a">
-                                    <div style="padding:10px 14px 12px 14px;border-bottom:2px solid #1e293b">
-                                        <div style="font-size:10px;font-weight:700;color:#475569;margin-bottom:8px;letter-spacing:0.08em">VERSİYON GEÇMİŞİ — @p.Name</div>
+                                <td colspan="@(Session.CanManage ? 7 : 6)" style="padding:0;background:var(--bg-base)">
+                                    <div style="padding:10px 14px 12px 14px;border-bottom:2px solid var(--border)">
+                                        <div style="font-size:10px;font-weight:700;color:var(--text-ghost);margin-bottom:8px;letter-spacing:0.08em">VERSİYON GEÇMİŞİ — @p.Name</div>
                                         @if (!history.Any())
                                         {
-                                            <div style="font-size:11px;color:#475569">Kayıt bulunamadı</div>
+                                            <div style="font-size:11px;color:var(--text-ghost)">Kayıt bulunamadı</div>
                                         }
                                         else
                                         {
@@ -329,25 +329,25 @@
                                                 @foreach (var h in history)
                                                 {
                                                     var isActive = h.ValidTo == null;
-                                                    <div style="display:flex;align-items:center;gap:16px;padding:6px 10px;border-radius:7px;background:@(isActive ? "rgba(16,185,129,0.06)" : "rgba(71,85,105,0.08)");border:1px solid @(isActive ? "rgba(16,185,129,0.2)" : "rgba(30,41,59,0.8)")">
+                                                    <div style="display:flex;align-items:center;gap:16px;padding:6px 10px;border-radius:7px;background:@(isActive ? "rgba(10,107,102,0.06)" : "rgba(71,85,105,0.08)");border:1px solid @(isActive ? "rgba(10,107,102,0.2)" : "rgba(229,222,208,0.8)")">
                                                         <div style="width:48px;text-align:center">
-                                                            <span style="padding:1px 7px;border-radius:4px;font-size:9px;font-weight:700;background:@(isActive ? "rgba(16,185,129,0.15)" : "rgba(71,85,105,0.2)");color:@(isActive ? "#10b981" : "#475569")">
+                                                            <span style="padding:1px 7px;border-radius:4px;font-size:9px;font-weight:700;background:@(isActive ? "rgba(10,107,102,0.15)" : "rgba(71,85,105,0.2)");color:@(isActive ? "var(--accent)" : "var(--text-ghost)")">
                                                                 @(isActive ? "AKTİF" : $"v{h.VersionNo}")
                                                             </span>
                                                         </div>
-                                                        <div style="font-size:11px;color:#64748b;width:140px">
-                                                            Geçerlilik: <span style="color:#94a3b8">@h.ValidFrom.ToString("dd.MM.yyyy")</span>
+                                                        <div style="font-size:11px;color:var(--text-faint);width:140px">
+                                                            Geçerlilik: <span style="color:var(--text-dim)">@h.ValidFrom.ToString("dd.MM.yyyy")</span>
                                                             @if (h.ValidTo.HasValue)
                                                             {
-                                                                <span style="color:#475569"> → @h.ValidTo.Value.ToString("dd.MM.yyyy")</span>
+                                                                <span style="color:var(--text-ghost)"> → @h.ValidTo.Value.ToString("dd.MM.yyyy")</span>
                                                             }
                                                             else
                                                             {
-                                                                <span style="color:#10b981"> → devam</span>
+                                                                <span style="color:var(--accent)"> → devam</span>
                                                             }
                                                         </div>
-                                                        <div style="font-size:12px;color:#94a3b8">Ağırlık: <span style="font-weight:700;color:#f1f5f9">@h.Weight</span></div>
-                                                        <div style="font-size:12px;color:#94a3b8">Min: <span style="font-weight:700;color:#f1f5f9">%@((int)Math.Round(h.MinRate*100))</span></div>
+                                                        <div style="font-size:12px;color:var(--text-dim)">Ağırlık: <span style="font-weight:700;color:var(--text)">@h.Weight</span></div>
+                                                        <div style="font-size:12px;color:var(--text-dim)">Min: <span style="font-weight:700;color:var(--text)">%@((int)Math.Round(h.MinRate*100))</span></div>
                                                     </div>
                                                 }
                                             </div>
@@ -366,37 +366,37 @@
     @if (showAddDialog)
     {
         <div style="position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)" @onclick="CloseAddDialog">
-            <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;width:450px" @onclick:stopPropagation>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:450px" @onclick:stopPropagation>
                 <div style="display:flex;justify-content:space-between;margin-bottom:16px">
-                    <h3 style="margin:0;font-size:16px;color:#f1f5f9">Yeni Ürün Ekle</h3>
-                    <button @onclick="CloseAddDialog" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px">✗</button>
+                    <h3 style="margin:0;font-size:16px;color:var(--text)">Yeni Ürün Ekle</h3>
+                    <button @onclick="CloseAddDialog" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px">✗</button>
                 </div>
 
                 <div style="margin-bottom:12px">
-                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ürün Adı</label>
-                    <input @bind="newName" @bind:event="oninput" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" placeholder="Ürün adını girin" />
+                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Ürün Adı</label>
+                    <input @bind="newName" @bind:event="oninput" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box" placeholder="Ürün adını girin" />
                 </div>
 
                 <div style="margin-bottom:12px">
-                    <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">InfiniLens Marka Adı (Import Alias)</label>
-                    <input @bind="newAlias" @bind:event="oninput" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" placeholder="BENGAY, NICORETTE GUM, vb." />
+                    <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">InfiniLens Marka Adı (Import Alias)</label>
+                    <input @bind="newAlias" @bind:event="oninput" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box" placeholder="BENGAY, NICORETTE GUM, vb." />
                 </div>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
                     <div>
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ürün Grubu</label>
-                        <select @bind="newGroup" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Ürün Grubu</label>
+                        <select @bind="newGroup" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px">
                             <option value="OTC">OTC</option>
                             <option value="ITR">ITR</option>
                         </select>
                     </div>
                     <div>
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ağırlık</label>
-                        <input type="number" @bind="newWeight" @bind:event="oninput" min="0" max="100" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px;box-sizing:border-box" />
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Ağırlık</label>
+                        <input type="number" @bind="newWeight" @bind:event="oninput" min="0" max="100" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box" />
                     </div>
                     <div>
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Prim Dahil</label>
-                        <select @bind="newPrim" style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:13px">
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Prim Dahil</label>
+                        <select @bind="newPrim" style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px">
                             <option value="true">Evet</option>
                             <option value="false">Hayır</option>
                         </select>
@@ -405,12 +405,12 @@
 
                 @if (!string.IsNullOrEmpty(addError))
                 {
-                    <div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:8px;margin-bottom:12px;color:#ef4444;font-size:12px">@addError</div>
+                    <div style="background:rgba(181,65,58,0.1);border-radius:6px;padding:8px;margin-bottom:12px;color:var(--danger);font-size:12px">@addError</div>
                 }
 
                 <div style="display:flex;justify-content:flex-end;gap:8px">
-                    <button @onclick="CloseAddDialog" style="padding:8px 16px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
-                    <button @onclick="AddProduct" style="padding:8px 16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Ekle</button>
+                    <button @onclick="CloseAddDialog" style="padding:8px 16px;background:rgba(98,119,116,0.1);color:var(--text-dim);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="AddProduct" style="padding:8px 16px;background:var(--info);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Ekle</button>
                 </div>
             </div>
         </div>
@@ -420,83 +420,83 @@
     @if (showConfirmDialog)
     {
         <div style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px)">
-            <div style="background:#111827;border:1px solid #334155;border-radius:14px;padding:24px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+            <div style="background:var(--bg-card);border:1px solid var(--border-strong);border-radius:14px;padding:24px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;font-size:16px">⚠️</div>
+                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(217,148,40,0.15);border:1px solid rgba(217,148,40,0.3);display:flex;align-items:center;justify-content:center;font-size:16px">⚠️</div>
                     <div>
-                        <div style="font-size:15px;font-weight:700;color:#f1f5f9">Değişikliği Onayla</div>
-                        <div style="font-size:11px;color:#64748b">@confirmProductName</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text)">Değişikliği Onayla</div>
+                        <div style="font-size:11px;color:var(--text-faint)">@confirmProductName</div>
                     </div>
                 </div>
 
-                <div style="background:#0a0f1a;border:1px solid #1e293b;border-radius:10px;padding:14px;margin-bottom:18px">
+                <div style="background:var(--bg-base);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px">
                     <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
 
                         <!-- Ağırlık -->
                         @if (confirmOriginalWeight != editWeight)
                         {
-                            <div style="color:#94a3b8;text-align:right">
-                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">ESKİ AĞIRLIK</div>
-                                <span style="font-size:18px;font-weight:700;color:#ef4444">@confirmOriginalWeight</span>
+                            <div style="color:var(--text-dim);text-align:right">
+                                <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">ESKİ AĞIRLIK</div>
+                                <span style="font-size:18px;font-weight:700;color:var(--danger)">@confirmOriginalWeight</span>
                             </div>
-                            <div style="color:#64748b;font-size:16px;text-align:center">→</div>
-                            <div style="color:#94a3b8">
-                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">YENİ AĞIRLIK</div>
-                                <span style="font-size:18px;font-weight:700;color:#10b981">@editWeight</span>
+                            <div style="color:var(--text-faint);font-size:16px;text-align:center">→</div>
+                            <div style="color:var(--text-dim)">
+                                <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">YENİ AĞIRLIK</div>
+                                <span style="font-size:18px;font-weight:700;color:var(--accent)">@editWeight</span>
                             </div>
                         }
                         else
                         {
-                            <div style="grid-column:1/-1;color:#64748b;font-size:11px;text-align:center">Ağırlık değişmedi (@editWeight)</div>
+                            <div style="grid-column:1/-1;color:var(--text-faint);font-size:11px;text-align:center">Ağırlık değişmedi (@editWeight)</div>
                         }
                     </div>
 
                     @if (confirmOriginalGroup != editGroup)
                     {
-                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e293b;display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
                             <div style="text-align:right">
-                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">ESKİ GRUP</div>
-                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.1);color:#ef4444">@confirmOriginalGroup</span>
+                                <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">ESKİ GRUP</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(181,65,58,0.1);color:var(--danger)">@confirmOriginalGroup</span>
                             </div>
-                            <div style="color:#64748b;font-size:16px;text-align:center">→</div>
+                            <div style="color:var(--text-faint);font-size:16px;text-align:center">→</div>
                             <div>
-                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">YENİ GRUP</div>
-                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981">@editGroup</span>
+                                <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">YENİ GRUP</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(10,107,102,0.12);color:var(--accent)">@editGroup</span>
                             </div>
                         </div>
                     }
 
                     @if (confirmOriginalPrim != editPrim)
                     {
-                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e293b;display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-size:12px">
                             <div style="text-align:right">
-                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">ESKİ PRİM</div>
-                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:@(confirmOriginalPrim ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(confirmOriginalPrim ? "#10b981" : "#ef4444")">@(confirmOriginalPrim ? "Evet" : "Hayır")</span>
+                                <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">ESKİ PRİM</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:@(confirmOriginalPrim ? "rgba(10,107,102,0.12)" : "rgba(181,65,58,0.1)");color:@(confirmOriginalPrim ? "var(--accent)" : "var(--danger)")">@(confirmOriginalPrim ? "Evet" : "Hayır")</span>
                             </div>
-                            <div style="color:#64748b;font-size:16px;text-align:center">→</div>
+                            <div style="color:var(--text-faint);font-size:16px;text-align:center">→</div>
                             <div>
-                                <div style="font-size:10px;color:#64748b;margin-bottom:2px">YENİ PRİM</div>
-                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:@(editPrim ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)");color:@(editPrim ? "#10b981" : "#ef4444")">@(editPrim ? "Evet" : "Hayır")</span>
+                                <div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">YENİ PRİM</div>
+                                <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:@(editPrim ? "rgba(10,107,102,0.12)" : "rgba(181,65,58,0.1)");color:@(editPrim ? "var(--accent)" : "var(--danger)")">@(editPrim ? "Evet" : "Hayır")</span>
                             </div>
                         </div>
                     }
                 </div>
 
-                <div style="margin-top:12px;padding:10px 12px;background:#0a0f1a;border:1px solid #1e293b;border-radius:8px;font-size:11px;color:#64748b">
-                    <span style="color:#f59e0b;font-weight:600">Geçerlilik: </span>
+                <div style="margin-top:12px;padding:10px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-faint)">
+                    <span style="color:var(--warning);font-weight:600">Geçerlilik: </span>
                     @if (applyQuarter == "ALL")
                     {
                         <span>Geriye dönük — mevcut kayıt güncellenir (tüm dönemler etkilenir)</span>
                     }
                     else
                     {
-                        <span style="color:#3b82f6;font-weight:600">@applyYear @applyQuarter</span><span>'dan itibaren yeni versiyon oluşturulur</span>
+                        <span style="color:var(--info);font-weight:600">@applyYear @applyQuarter</span><span>'dan itibaren yeni versiyon oluşturulur</span>
                     }
                 </div>
 
                 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
-                    <button @onclick="CancelConfirm" style="padding:9px 18px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Vazgeç</button>
-                    <button @onclick="ConfirmSave" style="padding:9px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Onayla</button>
+                    <button @onclick="CancelConfirm" style="padding:9px 18px;background:rgba(98,119,116,0.1);color:var(--text-dim);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Vazgeç</button>
+                    <button @onclick="ConfirmSave" style="padding:9px 18px;background:var(--info);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Onayla</button>
                 </div>
             </div>
         </div>
@@ -506,31 +506,31 @@
     @if (showKpiDialog && editingKpi != null)
     {
         <div style="position:fixed;inset:0;z-index:1001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px)" @onclick="() => { showKpiDialog = false; editingKpi = null; }">
-            <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;width:360px;box-shadow:0 24px 60px rgba(0,0,0,0.5)" @onclick:stopPropagation>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:360px;box-shadow:0 24px 60px rgba(0,0,0,0.5)" @onclick:stopPropagation>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
                     <div>
-                        <div style="font-size:15px;font-weight:700;color:#f1f5f9">KPI Düzenle</div>
-                        <div style="font-size:11px;color:#64748b;margin-top:2px">@editingKpi.Name</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text)">KPI Düzenle</div>
+                        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">@editingKpi.Name</div>
                     </div>
-                    <button @onclick="() => { showKpiDialog = false; editingKpi = null; }" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px">✕</button>
+                    <button @onclick="() => { showKpiDialog = false; editingKpi = null; }" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:18px">✕</button>
                 </div>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
                     <div>
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Ağırlık (%)</label>
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Ağırlık (%)</label>
                         <input type="number" min="0" max="100" @bind="kpiEditWeight" @bind:event="oninput"
-                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:14px;font-weight:700;box-sizing:border-box;text-align:center" />
+                               style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;text-align:center" />
                     </div>
                     <div>
-                        <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px">Min Oran (%)</label>
+                        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Min Oran (%)</label>
                         <input type="number" min="0" max="100" @bind="kpiEditMinRate" @bind:event="oninput"
-                               style="width:100%;padding:8px 11px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:14px;font-weight:700;box-sizing:border-box;text-align:center" />
+                               style="width:100%;padding:8px 11px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;text-align:center" />
                     </div>
                 </div>
 
                 <div style="display:flex;justify-content:flex-end;gap:8px">
-                    <button @onclick="() => { showKpiDialog = false; editingKpi = null; }" style="padding:8px 16px;background:rgba(148,163,184,0.1);color:#94a3b8;border:1px solid #1e293b;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
-                    <button @onclick="SaveKpi" style="padding:8px 16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Kaydet</button>
+                    <button @onclick="() => { showKpiDialog = false; editingKpi = null; }" style="padding:8px 16px;background:rgba(98,119,116,0.1);color:var(--text-dim);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">İptal</button>
+                    <button @onclick="SaveKpi" style="padding:8px 16px;background:var(--info);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Kaydet</button>
                 </div>
             </div>
         </div>

@@ -4,24 +4,24 @@
 @* Tek görev kartı: durum rozeti + (atanan ST ise) durum butonları + yorum akışı.
    Atayan tarafı (BM) salt-okunur durum görür, yorum yazabilir. *@
 
-<div style="background:#0a0f1a;border:1px solid @(BorderColor)33;border-radius:12px;padding:14px;margin-bottom:10px">
+<div style="background:var(--bg-base);border:1px solid @(BorderColor)33;border-radius:12px;padding:14px;margin-bottom:10px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="font-size:14px;font-weight:700;color:#f1f5f9">@Task.Title</span>
+                <span style="font-size:14px;font-weight:700;color:var(--text)">@Task.Title</span>
                 <span style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:800;background:@(PriorityColor)22;color:@PriorityColor;border:1px solid @(PriorityColor)44">@PriorityLabel</span>
                 <span style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:800;background:@(StatusColor)22;color:@StatusColor;border:1px solid @(StatusColor)44">@StatusLabel</span>
             </div>
             @if (!string.IsNullOrWhiteSpace(Task.Description))
             {
-                <div style="font-size:12px;color:#94a3b8;margin-top:6px;white-space:pre-wrap">@Task.Description</div>
+                <div style="font-size:12px;color:var(--text-dim);margin-top:6px;white-space:pre-wrap">@Task.Description</div>
             }
-            <div style="font-size:10px;color:#475569;margin-top:6px">
+            <div style="font-size:10px;color:var(--text-ghost);margin-top:6px">
                 @(IsAssignee ? $"Atayan: {Task.AssignerName}" : $"Atanan: {Task.AssigneeName}")
                 · @Task.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")
                 @if (Task.Deadline.HasValue)
                 {
-                    <span style="color:@(Task.Deadline < DateTime.UtcNow && Task.Status != "Completed" ? "#ef4444" : "#64748b")"> · ⏰ @Task.Deadline.Value.ToLocalTime().ToString("dd.MM.yyyy")</span>
+                    <span style="color:@(Task.Deadline < DateTime.UtcNow && Task.Status != "Completed" ? "var(--danger)" : "var(--text-faint)")"> · ⏰ @Task.Deadline.Value.ToLocalTime().ToString("dd.MM.yyyy")</span>
                 }
             </div>
         </div>
@@ -32,35 +32,35 @@
         <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
             @if (Task.Status == "New")
             {
-                <button @onclick='() => Update("InProgress")' disabled="@busy" style="@btn("#3b82f6")">▶ Başla</button>
+                <button @onclick='() => Update("InProgress")' disabled="@busy" style="@btn("var(--info)")">▶ Başla</button>
             }
-            <button @onclick='() => Update("Completed")' disabled="@busy" style="@btn("#10b981")">✓ Tamamla</button>
-            <button @onclick='() => Update("Rejected")' disabled="@busy" style="@btn("#ef4444")">✗ Reddet</button>
+            <button @onclick='() => Update("Completed")' disabled="@busy" style="@btn("var(--accent)")">✓ Tamamla</button>
+            <button @onclick='() => Update("Rejected")' disabled="@busy" style="@btn("var(--danger)")">✗ Reddet</button>
         </div>
     }
 
-    <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px">
-        <button @onclick="ToggleComments" style="background:none;border:none;color:#64748b;font-size:11px;font-weight:600;cursor:pointer;padding:0">
+    <div style="margin-top:10px;border-top:1px solid rgba(18,65,62,0.05);padding-top:8px">
+        <button @onclick="ToggleComments" style="background:none;border:none;color:var(--text-faint);font-size:11px;font-weight:600;cursor:pointer;padding:0">
             💬 Yorumlar @(showComments ? "▲" : "▼")
         </button>
         @if (showComments)
         {
             @foreach (var cm in comments)
             {
-                <div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px">
-                    <div style="font-size:10px;color:#64748b">@cm.UserName · @cm.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</div>
-                    <div style="font-size:12px;color:#cbd5e1;margin-top:2px;white-space:pre-wrap">@cm.Comment</div>
+                <div style="margin-top:8px;padding:8px 10px;background:rgba(18,65,62,0.02);border-radius:8px">
+                    <div style="font-size:10px;color:var(--text-faint)">@cm.UserName · @cm.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:2px;white-space:pre-wrap">@cm.Comment</div>
                 </div>
             }
             <div style="display:flex;gap:6px;margin-top:8px">
-                <input @bind="newComment" placeholder="Yorum yaz…" style="flex:1;padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px" />
-                <button @onclick="AddComment" disabled="@busy" style="@btn("#6366f1")">Gönder</button>
+                <input @bind="newComment" placeholder="Yorum yaz…" style="flex:1;padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px" />
+                <button @onclick="AddComment" disabled="@busy" style="@btn("var(--purple)")">Gönder</button>
             </div>
         }
     </div>
     @if (!string.IsNullOrEmpty(error))
     {
-        <div style="font-size:11px;color:#ef4444;margin-top:6px">@error</div>
+        <div style="font-size:11px;color:var(--danger);margin-top:6px">@error</div>
     }
 </div>
 
@@ -105,10 +105,10 @@
     private string BorderColor => StatusColor;
     private string StatusColor => Task.Status switch
     {
-        "Completed" => "#10b981",
-        "InProgress" => "#3b82f6",
-        "Rejected" => "#ef4444",
-        _ => "#64748b"
+        "Completed" => "var(--accent)",
+        "InProgress" => "var(--info)",
+        "Rejected" => "var(--danger)",
+        _ => "var(--text-faint)"
     };
     private string StatusLabel => Task.Status switch
     {
@@ -120,9 +120,9 @@
     };
     private string PriorityColor => Task.Priority switch
     {
-        "High" => "#ef4444",
-        "Low" => "#64748b",
-        _ => "#f59e0b"
+        "High" => "var(--danger)",
+        "Low" => "var(--text-faint)",
+        _ => "var(--warning)"
     };
     private string PriorityLabel => Task.Priority switch
     {

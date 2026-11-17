@@ -7,25 +7,27 @@
    yayınlanmadıkça ST/prim ekranlarında görünmez. *@
 @if (Session.CanManage && Freshness != null && (Freshness.AssignmentsStale || !Freshness.Published))
 {
-    <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center">
-        <div style="flex:1;min-width:260px;font-size:12.5px;color:#fbbf24;line-height:1.6">
+    <AlertBanner>
+        <ChildContent>
             @if (Freshness.AssignmentsStale)
             {
-                <div><strong>⚠ Brick atamaları veya ürün ağırlıkları son hesaplamadan sonra değişti.</strong> @Quarter @Year raporuna/prim ekranına yansıması için bu çeyreği <strong>yeniden hesaplayın</strong>.</div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:#b9770e;flex:none;margin-top:3px"><Icon Name="warning" Size="18" /></span>
+                    <span><strong>Brick atamaları veya ürün ağırlıkları son hesaplamadan sonra değişti.</strong> @Quarter @Year raporuna/prim ekranına yansıması için bu çeyreği <strong>yeniden hesaplayın</strong>.</span></div>
             }
             @if (!Freshness.Published)
             {
-                <div><strong>⏸ @Quarter @Year yayınlanmamış.</strong> ST ve prim ekranlarında görünmesi için <strong>/calculate → 📤 Yayınla</strong> adımını uygulayın.</div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:#b9770e;flex:none;margin-top:3px"><Icon Name="pause" Size="16" /></span>
+                    <span><strong>@Quarter @Year yayınlanmamış.</strong> ST ve prim ekranlarında görünmesi için <code style="padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.7);font-size:12px">/calculate</code> → <strong>Yayınla</strong> adımını uygulayın.</span></div>
             }
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        </ChildContent>
+        <Actions>
             @if (Freshness.AssignmentsStale && OnRecalculate.HasDelegate)
             {
-                <button @onclick="OnRecalculate" style="padding:7px 14px;background:#f59e0b;color:#0a0f1a;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⟳ Yeniden Hesapla</button>
+                <button type="button" class="p-btn p-btn--amber" @onclick="OnRecalculate"><Icon Name="refresh" Size="15" />Yeniden Hesapla</button>
             }
-            <a href="/calculate" style="padding:7px 14px;background:#1e293b;border:1px solid #334155;border-radius:7px;color:#e2e8f0;text-decoration:none;font-size:12px;font-weight:600">Hesapla/Yayınla →</a>
-        </div>
-    </div>
+            <a href="/calculate" class="p-btn">Hesapla/Yayınla →</a>
+        </Actions>
+    </AlertBanner>
 }
 
 @code {

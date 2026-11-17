@@ -12,9 +12,9 @@
     <!-- FİLTRE / SIRALAMA ÇUBUĞU (istemci tarafı — sunucuya gitmez) -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
         <input @bind="search" @bind:event="oninput" placeholder="🔍 Brick / şehir / eczane ara…"
-               style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:11px;min-width:200px" />
+               style="padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:11px;min-width:200px" />
         <div style="display:flex;align-items:center;gap:5px">
-            <span style="font-size:10px;color:#64748b">🗺 Brick:</span>
+            <span style="font-size:10px;color:var(--text-faint)">🗺 Brick:</span>
             <select @bind="brickSort" style="@SelStyle">
                 <option value="real">Realizasyon ↓</option>
                 <option value="sell">Sell-Out ↓</option>
@@ -23,7 +23,7 @@
             </select>
         </div>
         <div style="display:flex;align-items:center;gap:5px">
-            <span style="font-size:10px;color:#64748b">🏛 Eczane:</span>
+            <span style="font-size:10px;color:var(--text-faint)">🏛 Eczane:</span>
             <select @bind="phSort" style="@SelStyle">
                 <option value="box">Kutu ↓</option>
                 <option value="tl">TL ↓</option>
@@ -35,13 +35,13 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
         <!-- BRICK PERFORMANSI -->
-        <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px">
+        <div class="card3d" style="background:rgba(255,253,249,0.85);border:1px solid rgba(18,65,62,0.06);border-radius:14px;padding:18px">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-                <div style="font-size:13px;font-weight:700;color:#f1f5f9">🗺 @BrickTitle</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text)">🗺 @BrickTitle</div>
                 @if (products.Any())
                 {
                     <select @bind="selectedProductId" @bind:after="ReloadAsync"
-                            style="padding:5px 9px;background:#0a0f1a;border:1px solid rgba(139,92,246,0.3);border-radius:7px;color:#f1f5f9;font-size:11px">
+                            style="padding:5px 9px;background:var(--bg-base);border:1px solid rgba(109,74,173,0.3);border-radius:7px;color:var(--text);font-size:11px">
                         <option value="">Tüm Ürünler</option>
                         @foreach (var p in products)
                         {
@@ -52,18 +52,18 @@
             </div>
             @if (loading)
             {
-                <div style="color:#475569;font-size:12px;padding:10px 0">Yükleniyor…</div>
+                <div style="color:var(--text-ghost);font-size:12px;padding:10px 0">Yükleniyor…</div>
             }
             else if (!bricks.Any())
             {
-                <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Bu dönem için brick verisi yok.</div>
+                <div style="color:var(--text-ghost);font-size:12px;font-style:italic;padding:10px 0">Bu dönem için brick verisi yok.</div>
             }
             else
             {
                 var brickRows = DisplayBricks();
                 if (!brickRows.Any())
                 {
-                    <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Aramayla eşleşen brick yok.</div>
+                    <div style="color:var(--text-ghost);font-size:12px;font-style:italic;padding:10px 0">Aramayla eşleşen brick yok.</div>
                 }
                 else
                 {
@@ -81,22 +81,22 @@
         </div>
 
         <!-- EN İYİ ECZANELER -->
-        <div class="card3d" style="background:rgba(17,24,39,0.85);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px">
-            <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:14px">🏛 @PharmacyTitle</div>
+        <div class="card3d" style="background:rgba(255,253,249,0.85);border:1px solid rgba(18,65,62,0.06);border-radius:14px;padding:18px">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">🏛 @PharmacyTitle</div>
             @if (loading)
             {
-                <div style="color:#475569;font-size:12px;padding:10px 0">Yükleniyor…</div>
+                <div style="color:var(--text-ghost);font-size:12px;padding:10px 0">Yükleniyor…</div>
             }
             else if (!pharmacies.Any())
             {
-                <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Bu dönem için eczane (sell-out) verisi yok.</div>
+                <div style="color:var(--text-ghost);font-size:12px;font-style:italic;padding:10px 0">Bu dönem için eczane (sell-out) verisi yok.</div>
             }
             else
             {
                 var phRows = DisplayPharmacies();
                 if (!phRows.Any())
                 {
-                    <div style="color:#475569;font-size:12px;font-style:italic;padding:10px 0">Aramayla eşleşen eczane yok.</div>
+                    <div style="color:var(--text-ghost);font-size:12px;font-style:italic;padding:10px 0">Aramayla eşleşen eczane yok.</div>
                 }
                 else
                 {
@@ -141,7 +141,7 @@
     private string brickSort = "real";
     private string phSort = "box";
 
-    private const string SelStyle = "padding:5px 8px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:11px";
+    private const string SelStyle = "padding:5px 8px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:11px";
 
     private bool Match(params string?[] fields)
     {

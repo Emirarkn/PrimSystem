@@ -1,0 +1,31 @@
+@* Özet kartı: etiket + büyük değer + alt metin, isteğe bağlı halka. Tone: mint | amber | rose | (boş = krem). *@
+<div class="p-stat @(string.IsNullOrEmpty(Tone) ? "" : "p-stat--" + Tone) @(Compact ? "p-stat--sm" : "")">
+    <div style="min-width:0">
+        <div class="p-stat__label"><Icon Name="@IconName" Size="16" />@Label</div>
+        <div class="p-stat__value">@Value</div>
+        <div class="p-stat__sub">@Sub</div>
+    </div>
+    @if (Percent.HasValue)
+    {
+        <Ring Percent="Percent.Value" Size="@RingSize" Stroke="@Stroke" Color="@RingColor" Track="@RingTrack" AriaLabel="@($"{Label}: %{Percent.Value:F0}")" />
+    }
+    else if (Decor != null)
+    {
+        @Decor
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string Sub { get; set; } = "";
+    [Parameter] public string IconName { get; set; } = "star";
+    [Parameter] public string Tone { get; set; } = "";
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public double? Percent { get; set; }
+    [Parameter] public int RingSize { get; set; } = 84;
+    [Parameter] public int Stroke { get; set; } = 10;
+    [Parameter] public string RingColor { get; set; } = "var(--brand)";
+    [Parameter] public string RingTrack { get; set; } = "rgba(10,107,102,.15)";
+    [Parameter] public RenderFragment? Decor { get; set; }
+}

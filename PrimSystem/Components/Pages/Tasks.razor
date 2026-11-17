@@ -24,12 +24,12 @@ else if (!Session.IsBM && !Session.IsST)
 }
 else
 {
-    <div style="min-height:100vh;background:#0a0f1a;font-family:Segoe UI,sans-serif">
+    <div style="min-height:100vh;background:var(--bg-base);font-family:Segoe UI,sans-serif">
         <div style="max-width:960px;margin:0 auto;padding:22px 24px">
 
             <div style="margin-bottom:18px">
-                <div style="font-size:18px;font-weight:700;color:#f1f5f9">📋 Görevler</div>
-                <div style="font-size:11px;color:#475569">
+                <div style="font-size:18px;font-weight:700;color:var(--text)">📋 Görevler</div>
+                <div style="font-size:11px;color:var(--text-ghost)">
                     @(Session.IsST ? "Size atanan görevler — durumu güncelleyin ve yorum yazın." : "Satış Temsilcilerinize görev atayın ve durumunu takip edin.")
                 </div>
             </div>
@@ -37,12 +37,12 @@ else
             <!-- ════ ATAYAN (BM/Admin/Yönetici): Görev Ata ════ -->
             @if (canAssign)
             {
-                <div style="background:rgba(17,24,39,0.85);border:1px solid rgba(99,102,241,0.18);border-radius:14px;padding:18px;margin-bottom:18px">
-                    <div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:12px">➕ Yeni Görev</div>
+                <div style="background:rgba(255,253,249,0.85);border:1px solid rgba(107,79,179,0.18);border-radius:14px;padding:18px;margin-bottom:18px">
+                    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:12px">➕ Yeni Görev</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                         <div>
-                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">ATANAN</label>
-                            <select @bind="assignTarget" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                            <label style="font-size:10px;color:var(--text-faint);display:block;margin-bottom:4px">ATANAN</label>
+                            <select @bind="assignTarget" style="width:100%;padding:7px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                                 <option value="team">👥 Tüm @(Session.IsBM ? "Bölgem" : "ST'ler")</option>
                                 @foreach (var st in stList)
                                 {
@@ -51,41 +51,41 @@ else
                             </select>
                         </div>
                         <div>
-                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">ÖNCELİK</label>
-                            <select @bind="priority" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                            <label style="font-size:10px;color:var(--text-faint);display:block;margin-bottom:4px">ÖNCELİK</label>
+                            <select @bind="priority" style="width:100%;padding:7px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                                 <option value="Low">Düşük</option>
                                 <option value="Medium">Orta</option>
                                 <option value="High">Yüksek</option>
                             </select>
                         </div>
                         <div>
-                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">BAŞLIK</label>
-                            <input @bind="title" placeholder="Görev başlığı" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;box-sizing:border-box" />
+                            <label style="font-size:10px;color:var(--text-faint);display:block;margin-bottom:4px">BAŞLIK</label>
+                            <input @bind="title" placeholder="Görev başlığı" style="width:100%;padding:7px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;box-sizing:border-box" />
                         </div>
                         <div>
-                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">TERMİN (opsiyonel)</label>
-                            <input type="date" @bind="deadline" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;box-sizing:border-box" />
+                            <label style="font-size:10px;color:var(--text-faint);display:block;margin-bottom:4px">TERMİN (opsiyonel)</label>
+                            <input type="date" @bind="deadline" style="width:100%;padding:7px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;box-sizing:border-box" />
                         </div>
                         <div style="grid-column:1 / -1">
-                            <label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">AÇIKLAMA (opsiyonel)</label>
-                            <textarea @bind="description" rows="2" placeholder="Detay…" style="width:100%;padding:7px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px;box-sizing:border-box;resize:vertical"></textarea>
+                            <label style="font-size:10px;color:var(--text-faint);display:block;margin-bottom:4px">AÇIKLAMA (opsiyonel)</label>
+                            <textarea @bind="description" rows="2" placeholder="Detay…" style="width:100%;padding:7px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;box-sizing:border-box;resize:vertical"></textarea>
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
-                        <button @onclick="DoAssign" disabled="@busy" style="padding:8px 18px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+                        <button @onclick="DoAssign" disabled="@busy" style="padding:8px 18px;background:rgba(107,79,179,0.18);color:var(--purple-text);border:1px solid rgba(107,79,179,0.4);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
                             @(busy ? "Gönderiliyor…" : "Görev Ata")
                         </button>
                         @if (!string.IsNullOrEmpty(assignMsg))
                         {
-                            <span style="font-size:12px;color:@(assignOk ? "#10b981" : "#ef4444")">@assignMsg</span>
+                            <span style="font-size:12px;color:@(assignOk ? "var(--accent)" : "var(--danger)")">@assignMsg</span>
                         }
                     </div>
                 </div>
 
                 <!-- Atadığım görevler -->
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                    <div style="font-size:14px;font-weight:700;color:#f1f5f9">📌 Atadığım Görevler</div>
-                    <select @bind="statusFilter" @bind:after="LoadAssigned" style="padding:6px 10px;background:#0a0f1a;border:1px solid #1e293b;border-radius:7px;color:#f1f5f9;font-size:12px">
+                    <div style="font-size:14px;font-weight:700;color:var(--text)">📌 Atadığım Görevler</div>
+                    <select @bind="statusFilter" @bind:after="LoadAssigned" style="padding:6px 10px;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px">
                         <option value="All">Tümü</option>
                         <option value="New">Yeni</option>
                         <option value="InProgress">Devam eden</option>
@@ -95,7 +95,7 @@ else
                 </div>
                 @if (!assignedTasks.Any())
                 {
-                    <div style="color:#475569;font-size:12px;font-style:italic;padding:12px 0">Henüz görev atamadınız.</div>
+                    <div style="color:var(--text-ghost);font-size:12px;font-style:italic;padding:12px 0">Henüz görev atamadınız.</div>
                 }
                 else
                 {
@@ -109,10 +109,10 @@ else
             <!-- ════ ATANAN (ST): Görevlerim ════ -->
             @if (Session.IsST)
             {
-                <div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:10px">📥 Görevlerim</div>
+                <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px">📥 Görevlerim</div>
                 @if (!myTasks.Any())
                 {
-                    <div style="color:#475569;font-size:12px;font-style:italic;padding:12px 0">Size atanmış görev yok.</div>
+                    <div style="color:var(--text-ghost);font-size:12px;font-style:italic;padding:12px 0">Size atanmış görev yok.</div>
                 }
                 else
                 {

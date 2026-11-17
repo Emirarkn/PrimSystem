@@ -7,10 +7,10 @@
 
 @if (Session.IsImpersonating)
 {
-    <div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#f59e0b;padding:8px 20px;display:flex;align-items:center;justify-content:space-between;font-family:Segoe UI,sans-serif;font-size:13px;font-weight:600;color:#0a0f1a;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+    <div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--warning);padding:8px 20px;display:flex;align-items:center;justify-content:space-between;font-family:Segoe UI,sans-serif;font-size:13px;font-weight:600;color:var(--bg-base);box-shadow:0 2px 8px rgba(0,0,0,0.4)">
         <span>👤 Admin görünümü: <strong>@Session.CurrentUser?.FullName</strong> (@Session.CurrentUser?.Role?.Name) olarak görüntülüyorsunuz</span>
         <button @onclick="StopImpersonating"
-                style="padding:5px 16px;background:#0a0f1a;color:#f59e0b;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">
+                style="padding:5px 16px;background:var(--bg-base);color:var(--warning);border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">
             ← Kendi Hesabıma Dön
         </button>
     </div>

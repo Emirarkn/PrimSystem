@@ -9,86 +9,101 @@
 @inject IHttpContextAccessor HttpCtx
 @rendermode InteractiveServer
 
-<div style="min-height:100vh;background:#050b15;display:flex;align-items:stretch;font-family:Segoe UI,sans-serif;position:relative;overflow:hidden">
-
-    <!-- Arka plan dekorasyon -->
-    <div style="position:absolute;top:-160px;left:-160px;width:600px;height:600px;background:radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 65%);pointer-events:none"></div>
-    <div style="position:absolute;bottom:-120px;right:-120px;width:500px;height:500px;background:radial-gradient(circle,rgba(16,185,129,0.12) 0%,transparent 65%);pointer-events:none"></div>
-    <div style="position:absolute;top:40%;left:55%;width:350px;height:350px;background:radial-gradient(circle,rgba(245,158,11,0.07) 0%,transparent 65%);pointer-events:none"></div>
-
-    <!-- Sol panel — marka alanı -->
-    <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:60px;background:linear-gradient(135deg,rgba(99,102,241,0.06) 0%,transparent 60%)">
-        <div style="max-width:420px">
-            <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:#fff;margin-bottom:28px;box-shadow:0 8px 24px rgba(99,102,241,0.35)">P</div>
-            <h1 style="color:#f1f5f9;font-size:32px;font-weight:800;margin:0 0 10px;letter-spacing:-1px;line-height:1.2">Prim Yönetim<br /><span style="background:linear-gradient(90deg,#6366f1,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Sistemi</span></h1>
-            <p style="color:#64748b;font-size:15px;margin:0 0 40px;line-height:1.6">İlaç sektörü satış temsilcileri için çeyreklik prim hesaplama ve performans takip platformu.</p>
-            <div style="display:flex;flex-direction:column;gap:12px">
-                @foreach (var (icon, text) in new[] { ("📊","Çeyreklik performans hesaplama"), ("🏆","Bölge bazlı sıralama ve badge'ler"), ("📨","Otomatik bildirim ve yayınlama") })
-                {
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <div style="width:32px;height:32px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px">@icon</div>
-                        <span style="font-size:13px;color:#94a3b8">@text</span>
-                    </div>
-                }
-            </div>
-        </div>
+<div class="login-page">
+    <div class="login-art" aria-hidden="true">
+        <svg viewBox="0 0 800 940" preserveAspectRatio="xMinYMax slice" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="lgWave" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5fd0bb"/><stop offset="1" stop-color="#0a7f70"/></linearGradient>
+                <linearGradient id="lgRib1" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="#7fdcc3" stop-opacity=".95"/><stop offset="1" stop-color="#e4f1cf" stop-opacity=".55"/></linearGradient>
+                <linearGradient id="lgRib2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9e6d3" stop-opacity=".9"/><stop offset="1" stop-color="#fbe3b8" stop-opacity=".5"/></linearGradient>
+                <radialGradient id="lgGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd9a0" stop-opacity=".75"/><stop offset="1" stop-color="#ffd9a0" stop-opacity="0"/></radialGradient>
+            </defs>
+            <circle cx="240" cy="430" r="230" fill="url(#lgGlow)"/>
+            <path d="M560 -10 C760 40 800 230 630 340 C480 430 250 430 130 640 C250 480 450 420 560 300 C680 175 660 70 560 -10 Z" fill="url(#lgRib1)" stroke="#4cbfa6" stroke-opacity=".55" stroke-width="2"/>
+            <path d="M470 120 C640 130 700 300 560 410 C430 500 300 520 200 700 C310 560 420 500 520 400 C620 300 590 190 470 120 Z" fill="url(#lgRib2)" stroke="#4cbfa6" stroke-opacity=".45" stroke-width="2"/>
+            <path d="M0 600 C200 640 470 770 800 940 L0 940 Z" fill="url(#lgWave)" opacity=".95"/>
+            <path d="M0 690 C220 700 430 800 640 940 L0 940 Z" fill="#0a7f70" opacity=".35"/>
+        </svg>
     </div>
 
-    <!-- Sağ panel — giriş formu -->
-    <div style="width:460px;display:flex;align-items:center;justify-content:center;padding:40px;background:rgba(10,15,26,0.7);border-left:1px solid rgba(255,255,255,0.04)">
-        <div style="width:100%;max-width:360px">
+    <main class="login-main">
+        <img src="/images/Kenvue.png" alt="Kenvue" class="login-brand" />
 
-            <div style="margin-bottom:32px">
-                <img src="/images/Kenvue.png" alt="Kenvue" style="height:36px;margin-bottom:20px;opacity:0.9" />
-                <h2 style="color:#f1f5f9;margin:0 0 4px;font-size:22px;font-weight:700">Hoş geldiniz</h2>
-                <p style="color:#64748b;margin:0;font-size:13px">Hesabınıza giriş yapın</p>
-            </div>
+        <section class="login-form" aria-label="Hesap girişi">
+            <div class="login-kicker"><span></span>Prim Yönetim Sistemi</div>
+            <h1>Hoş geldiniz</h1>
+            <p class="login-subtitle">Hesabınıza giriş yapın</p>
 
             @if (!string.IsNullOrEmpty(errorMsg))
             {
-                <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:11px 14px;margin-bottom:18px;display:flex;align-items:center;gap:10px">
-                    <span style="font-size:16px">⚠️</span>
-                    <span style="color:#f87171;font-size:13px">@errorMsg</span>
-                </div>
+                <div class="login-error" role="alert">@errorMsg</div>
             }
 
-            <div style="margin-bottom:14px">
-                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Kullanıcı Adı</label>
-                <div style="position:relative">
-                    <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;opacity:0.5">👤</span>
-                    <input type="text" @bind="username" @bind:event="oninput" placeholder="AhmetYı"
-                           style="width:100%;padding:11px 14px 11px 38px;background:#0d1424;border:1px solid #1e293b;border-radius:10px;color:#f1f5f9;font-size:14px;outline:none;box-sizing:border-box;transition:border-color 0.2s" />
-                </div>
+            <div class="login-field">
+                <label for="username" class="sr-only">Kullanıcı adı</label>
+                <svg class="login-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+                <input id="username" type="text" placeholder="Kullanıcı adı" @bind="username" @bind:event="oninput" autocomplete="username" />
             </div>
 
-            <div style="margin-bottom:6px">
-                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:7px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Şifre</label>
-                <div style="position:relative">
-                    <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;opacity:0.5">🔒</span>
-                    <input type="password" @bind="password" @bind:event="oninput" @onkeypress="HandleKeyPress" placeholder="••••••••"
-                           style="width:100%;padding:11px 14px 11px 38px;background:#0d1424;border:1px solid #1e293b;border-radius:10px;color:#f1f5f9;font-size:14px;outline:none;box-sizing:border-box;transition:border-color 0.2s" />
-                </div>
+            <div class="login-field">
+                <label for="password" class="sr-only">Şifre</label>
+                <svg class="login-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+                <input id="password" type="@(showPassword ? "text" : "password")" placeholder="Şifre" @bind="password" @bind:event="oninput" @onkeypress="HandleKeyPress" autocomplete="current-password" />
+                <button type="button" class="login-eye" @onclick="() => showPassword = !showPassword" aria-label="@(showPassword ? "Şifreyi gizle" : "Şifreyi göster")" aria-pressed="@(showPassword ? "true" : "false")">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>@if (showPassword) {<path d="M4 4l16 16"/>}</svg>
+                </button>
             </div>
 
-            <div style="text-align:right;margin-bottom:22px;margin-top:8px">
-                <a href="/forgot-password" style="font-size:12px;color:#6366f1;text-decoration:none;font-weight:500">Şifremi Unuttum?</a>
-            </div>
-
-            <button @onclick="DoLogin" disabled="@isLoading"
-                    style="width:100%;padding:13px;background:linear-gradient(135deg,#6366f1,#3b82f6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.02em;box-shadow:0 4px 16px rgba(99,102,241,0.35);transition:opacity 0.2s;opacity:@(isLoading ? "0.7" : "1")">
-                @(isLoading ? "⏳ Giriş yapılıyor..." : "Giriş Yap →")
+            <div class="login-forgot"><a href="/forgot-password">Şifremi unuttum</a></div>
+            <button class="login-submit" @onclick="DoLogin" disabled="@isLoading">
+                <span>@(isLoading ? "Giriş yapılıyor…" : "Giriş yap")</span>
+                <span class="login-arrow" aria-hidden="true">→</span>
             </button>
-
-            <p style="text-align:center;margin-top:24px;font-size:11px;color:#334155">Kenvue Prim Sistemi · @DateTime.Now.Year</p>
-        </div>
-    </div>
+            <p class="login-footer">Kenvue Prim Sistemi · @DateTime.Now.Year</p>
+        </section>
+    </main>
 </div>
+
+<style>
+    .login-page { min-height:100vh; display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr); background:linear-gradient(135deg,#fbf6ee 0%,#faf3e8 55%,#f7efe2 100%); color:var(--text); font-family:"Segoe UI",Arial,sans-serif; position:relative; overflow:hidden; }
+    .login-art { position:relative; min-height:100vh; }
+    .login-art svg { position:absolute; inset:0; width:100%; height:100%; }
+    .login-main { display:flex; flex-direction:column; justify-content:center; padding:40px clamp(28px,6vw,96px) 40px 24px; box-sizing:border-box; }
+    .login-brand { position:absolute; top:28px; left:24px; height:40px; width:auto; object-fit:contain; border-radius:8px; }
+    .login-form { width:100%; max-width:430px; }
+    .login-kicker { display:flex; align-items:center; gap:12px; color:var(--brand-deep); font-size:18px; font-weight:500; margin-bottom:22px; }
+    .login-kicker span { width:4px; height:30px; border-radius:2px; background:var(--brand-kenvue); }
+    .login-form h1 { margin:0 0 8px; color:#0e3b38; font-size:clamp(34px,4.4vw,52px); line-height:1.08; font-weight:700; letter-spacing:-1px; }
+    .login-subtitle { margin:0 0 30px; color:#6f7f7c; font-size:18px; }
+    .login-error { margin:0 0 16px; padding:11px 13px; border:1px solid #efcccc; border-radius:10px; background:#fff8f7; color:#a73e3a; font-size:13px; }
+    .login-field { position:relative; display:flex; align-items:center; margin-bottom:16px; height:58px; padding:0 16px 0 0; border:1px solid #d9d3c6; border-radius:16px; background:rgba(255,255,255,.72); box-shadow:inset 0 1px 0 rgba(255,255,255,.9); transition:border-color .18s,box-shadow .18s,background .18s; }
+    .login-field:focus-within { border-color:var(--brand-kenvue); background:#fff; box-shadow:0 0 0 4px rgba(0,133,113,.13); }
+    .login-ico { flex:none; width:24px; height:24px; margin:0 14px 0 18px; color:#6b7b78; padding-right:14px; border-right:1px solid #dcd6ca; box-sizing:content-box; }
+    .login-field input { flex:1; min-width:0; height:100%; border:0; outline:0; background:transparent; color:var(--text); font:inherit; font-size:16px; }
+    .login-field input::placeholder { color:#7d8a87; }
+    .login-eye { flex:none; display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:0; border-radius:10px; background:transparent; color:#4d5f5c; cursor:pointer; }
+    .login-eye svg { width:22px; height:22px; }
+    .login-eye:hover { background:rgba(5,89,85,.08); }
+    .login-eye:focus-visible { outline:3px solid rgba(5,89,85,.3); }
+    .login-forgot { margin:2px 0 22px; text-align:right; }
+    .login-forgot a { color:var(--brand); font-size:15px; text-decoration:underline; text-underline-offset:3px; }
+    .login-forgot a:hover { color:var(--brand-deep); }
+    .login-submit { position:relative; display:flex; align-items:center; justify-content:center; width:100%; height:62px; border:1px solid rgba(255,255,255,.35); border-radius:999px; background:linear-gradient(90deg,#055955 0%,#0a6f67 70%,#0e857a 100%); color:#fff; font-size:19px; font-weight:700; cursor:pointer; box-shadow:0 10px 24px rgba(5,89,85,.28), inset 0 1px 0 rgba(255,255,255,.25); transition:transform .18s,box-shadow .18s,filter .18s; }
+    .login-arrow { position:absolute; right:6px; top:6px; width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.45); font-size:24px; }
+    .login-submit:hover:not(:disabled) { transform:translateY(-1px); filter:brightness(1.06); box-shadow:0 14px 30px rgba(5,89,85,.32), inset 0 1px 0 rgba(255,255,255,.25); }
+    .login-submit:focus-visible { outline:3px solid rgba(5,89,85,.35); outline-offset:3px; }
+    .login-submit:disabled { opacity:.7; cursor:wait; }
+    .login-footer { margin:26px 0 0; color:#8b9794; font-size:12px; }
+    .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+    @@media (max-width:860px) { .login-page { grid-template-columns:1fr; } .login-art { position:absolute; inset:0; min-height:0; opacity:.35; } .login-main { padding:96px 24px 40px; align-items:center; } }
+</style>
 
 @code {
     private string username = "";
     private string password = "";
     private string errorMsg = "";
     private bool isLoading = false;
+    private bool showPassword = false;
     private bool _sessionChecked = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -146,3 +161,4 @@
         }
     }
 }
+

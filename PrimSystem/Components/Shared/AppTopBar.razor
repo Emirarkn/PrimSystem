@@ -8,24 +8,24 @@
 
 @if (Session.IsLoggedIn)
 {
-    <div style="position:sticky;top:0;z-index:100;height:52px;background:rgba(11,17,32,0.95);border-bottom:1px solid rgba(255,255,255,0.06);backdrop-filter:blur(12px);padding:0 24px;display:flex;align-items:center;justify-content:space-between;font-family:Segoe UI,sans-serif">
+    <div style="position:sticky;top:0;z-index:100;height:56px;background:rgba(255,253,249,0.88);border-bottom:1px solid var(--border);box-shadow:0 4px 18px rgba(5,89,85,0.06);backdrop-filter:blur(14px);padding:0 24px;display:flex;align-items:center;justify-content:space-between;font-family:Segoe UI,sans-serif">
 
         <!-- Sol: Logo + Nav -->
         <div style="display:flex;align-items:center;gap:16px;height:100%">
             <div style="display:flex;align-items:center;gap:10px;cursor:pointer" @onclick='() => Nav.NavigateTo("/")'>
-                <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(99,102,241,0.3)">P</div>
-                <span style="font-size:14px;font-weight:700;color:#f1f5f9">PrimSystem</span>
+                <img src="/images/prim-symbol.png" alt="" width="30" height="30" style="display:block;object-fit:contain" />
+                <span style="font-size:16px;font-weight:700;color:var(--brand-deep);letter-spacing:-0.2px">PrimSystem</span>
             </div>
 
-            <div style="width:1px;height:24px;background:#1e293b"></div>
+            <div style="width:1px;height:24px;background:var(--border)"></div>
 
             <nav style="display:flex;align-items:center;gap:2px;height:100%">
                 @foreach (var item in visibleItems)
                 {
                     var active = IsActive(item.Route);
                     <button type="button" @onclick="() => Navigate(item.Route)"
-                            style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;border:1px solid @(active ? "rgba(16,185,129,0.3)" : "transparent");background:@(active ? "rgba(16,185,129,0.12)" : "transparent");color:@(active ? "#10b981" : "#94a3b8");transition:all 0.15s">
-                        <span style="font-size:13px">@item.Icon</span>
+                            style="padding:7px 13px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;border:1px solid transparent;background:@(active ? "var(--brand-deep)" : "transparent");color:@(active ? "#fff" : "var(--text-muted)");box-shadow:@(active ? "0 3px 10px rgba(5,89,85,0.28)" : "none");transition:all 0.15s">
+                        <Icon Name="@item.Icon" Size="16" />
                         @item.Label
                     </button>
                 }
@@ -35,8 +35,8 @@
                     var mActive = manageRoutes.Any(r => IsActive(r));
                     <div style="position:relative;height:100%;display:flex;align-items:center">
                         <button type="button" @onclick="ToggleManageMenu"
-                                style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;border:1px solid @(mActive ? "rgba(245,158,11,0.3)" : "transparent");background:@(mActive ? "rgba(245,158,11,0.12)" : "transparent");color:@(mActive ? "#f59e0b" : "#94a3b8");transition:all 0.15s">
-                            <span style="font-size:13px">@("⚙️")</span>
+                                style="padding:7px 13px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;border:1px solid transparent;background:@(mActive ? "var(--brand-deep)" : "transparent");color:@(mActive ? "#fff" : "var(--text-muted)");box-shadow:@(mActive ? "0 3px 10px rgba(5,89,85,0.28)" : "none");transition:all 0.15s">
+                            <Icon Name="gear" Size="16" />
                             Yönetim
                             <span style="font-size:9px;margin-left:2px">@(showManageMenu ? "▲" : "▼")</span>
                         </button>
@@ -44,13 +44,13 @@
                         @if (showManageMenu)
                         {
                             <div style="position:fixed;inset:0;z-index:199" @onclick="CloseManageMenu"></div>
-                            <div style="position:absolute;left:0;top:100%;margin-top:4px;background:#111827;border:1px solid #1e293b;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:200;min-width:180px;overflow:hidden;padding:4px">
+                            <div style="position:absolute;left:0;top:100%;margin-top:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:200;min-width:180px;overflow:hidden;padding:4px">
                                 @foreach (var mi in manageItems)
                                 {
                                     var mia = IsActive(mi.Route);
                                     <button type="button" @onclick="() => Navigate(mi.Route)"
-                                            style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;cursor:pointer;text-align:left;border:none;background:@(mia ? "rgba(245,158,11,0.12)" : "transparent");color:@(mia ? "#f59e0b" : "#cbd5e1");font-size:12px;font-weight:@(mia ? "700" : "500");transition:background 0.15s">
-                                        <span style="font-size:14px;width:20px;text-align:center">@mi.Icon</span>
+                                            style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;cursor:pointer;text-align:left;border:none;background:@(mia ? "rgba(10,107,102,0.10)" : "transparent");color:@(mia ? "var(--brand-deep)" : "var(--text-muted)");font-size:12px;font-weight:@(mia ? "700" : "500");transition:background 0.15s">
+                                        <span style="width:20px;display:flex;justify-content:center"><Icon Name="@mi.Icon" Size="16" /></span>
                                         @mi.Label
                                     </button>
                                 }
@@ -64,15 +64,15 @@
         <!-- Sag: Bildirim + Kullanici + Cikis -->
         <div style="display:flex;align-items:center;gap:8px">
             <NotificationBell />
-            <div style="font-size:10px;color:#64748b;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            <div style="font-size:11px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                 @Session.RoleName — @(Session.CurrentUser?.FullName ?? "")
             </div>
             <button @onclick='() => Nav.NavigateTo("/change-password")'
-                    style="padding:5px 10px;background:rgba(148,163,184,0.07);color:#94a3b8;border:1px solid rgba(255,255,255,0.07);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    style="padding:6px 12px;background:var(--bg-card);color:var(--brand-deep);border:1px solid var(--border-strong);border-radius:9px;font-size:12px;font-weight:600;cursor:pointer">
                 Şifre
             </button>
             <button @onclick="DoLogout"
-                    style="padding:5px 10px;background:rgba(239,68,68,0.08);color:#f87171;border:1px solid rgba(239,68,68,0.2);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">
+                    style="padding:6px 14px;background:var(--brand-deep);color:#fff;border:1px solid var(--brand-deep);border-radius:9px;font-size:12px;box-shadow:0 3px 10px rgba(5,89,85,0.25);font-weight:600;cursor:pointer">
                 Çıkış
             </button>
         </div>
@@ -87,30 +87,30 @@
 
     private readonly NavItem[] mainItems = new[]
     {
-        new NavItem("🏠", "Ana Sayfa", "/"),
-        new NavItem("📊", "Raporlar", "/reports"),
-        new NavItem("🏛", "Eczane Analizi", "/eczaneler"),
-        new NavItem("🔔", "Bildirimler", "/notifications"),
+        new NavItem("home", "Ana Sayfa", "/"),
+        new NavItem("bars", "Raporlar", "/reports"),
+        new NavItem("pharmacy", "Eczane Analizi", "/eczaneler"),
+        new NavItem("bell", "Bildirimler", "/notifications"),
     };
 
-    private readonly NavItem orgItem = new("🏢", "Organizasyon", "/organization");
-    private readonly NavItem photoReviewItem = new("📷", "Foto Kontrol", "/photo-review");
-    private readonly NavItem photoUploadItem = new("📷", "Fotoğraf Yükle", "/photos");
-    private readonly NavItem bolgeAnalizItem = new("🗺", "Bölge Analizi", "/bolgem");
-    private readonly NavItem turkiyeAnalizItem = new("🌐", "Overview", "/overview");
-    private readonly NavItem tasksItem = new("📋", "Görevler", "/gorevler");
+    private readonly NavItem orgItem = new("users", "Organizasyon", "/organization");
+    private readonly NavItem photoReviewItem = new("camera", "Foto Kontrol", "/photo-review");
+    private readonly NavItem photoUploadItem = new("camera", "Fotoğraf Yükle", "/photos");
+    private readonly NavItem bolgeAnalizItem = new("pin", "Bölge Analizi", "/bolgem");
+    private readonly NavItem turkiyeAnalizItem = new("globe", "Overview", "/overview");
+    private readonly NavItem tasksItem = new("clipboard", "Görevler", "/gorevler");
 
     private readonly NavItem[] manageItems = new[]
     {
-        new NavItem("🧮", "Hesaplama", "/calculate"),
-        new NavItem("📈", "Etkinlik Analizi", "/activity"),
-        new NavItem("📥", "Veri Yükle", "/import"),
-        new NavItem("📅", "Dönemler", "/periods"),
-        new NavItem("⚖️", "Scorecard", "/scorecard"),
-        new NavItem("💰", "Prim Ayarları", "/prim-config"),
-        new NavItem("🗺️", "Brick", "/bricks"),
-        new NavItem("📷", "Foto Kontrol", "/photo-review"),
-        new NavItem("🖥️", "Kontrol Paneli", "/panel"),
+        new NavItem("calc", "Hesaplama", "/calculate"),
+        new NavItem("bars", "Etkinlik Analizi", "/activity"),
+        new NavItem("download", "Veri Yükle", "/import"),
+        new NavItem("calendar", "Dönemler", "/periods"),
+        new NavItem("scale", "Scorecard", "/scorecard"),
+        new NavItem("coin", "Prim Ayarları", "/prim-config"),
+        new NavItem("pin", "Brick", "/bricks"),
+        new NavItem("camera", "Foto Kontrol", "/photo-review"),
+        new NavItem("monitor", "Kontrol Paneli", "/panel"),
     };
 
     private static readonly string[] manageRoutes = new[]
