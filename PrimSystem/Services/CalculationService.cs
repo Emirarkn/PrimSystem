@@ -782,18 +782,19 @@ namespace PrimSystem.Services
             }
         }
 
-        public async Task UnpublishAsync(int year, string quarter, int stoppedBy = 0)
+        // stoppedBy zorunlu ve varsayılansız: 0 ile çağrılınca yetki kontrolü ve denetim kaydı atlanıyor,
+        // tüm satış ekibinin yayınlanmış primi sessizce geri çekilebiliyordu.
+        public async Task UnpublishAsync(int year, string quarter, int stoppedBy)
         {
             ValidateQuarter(quarter);
-            if (stoppedBy > 0) await EnsureAdminAsync(stoppedBy);
+            await EnsureAdminAsync(stoppedBy);
             using var db = _factory.CreateDbContext();
             var calcs = await db.Calculations
                 .Where(c => c.Year == year && c.Quarter == quarter).ToListAsync();
             foreach (var c in calcs) { c.IsPublished = false; c.PublishedAt = null; c.PublishedBy = null; }
             await db.SaveChangesAsync();
-            if (stoppedBy > 0)
-                await _audit.LogAsync(stoppedBy, "Unpublish", "Calculation", null,
-                    oldValue: $"{year} {quarter} — {calcs.Count} hesaplama yayından kaldırıldı");
+            await _audit.LogAsync(stoppedBy, "Unpublish", "Calculation", null,
+                oldValue: $"{year} {quarter} — {calcs.Count} hesaplama yayından kaldırıldı");
         }
 
         public async Task<(int Year, string Quarter)?> GetLatestPublishedAsync()
@@ -1024,7 +1025,7 @@ namespace PrimSystem.Services
         public async Task<List<RegionAnalyticsRow>> GetRegionAnalyticsAsync(int year, string quarter)
         {
             using var db = _factory.CreateDbContext();
-            var summaries = await GetResultsAsync(year, quarter);
+            var summaries = await QueryResultsAsync(year, quarter);
             return summaries
                 .Where(s => s.Calc.User?.Region != null)
                 .GroupBy(s => s.Calc.User!.Region!.Name)
@@ -1234,7 +1235,29 @@ namespace PrimSystem.Services
             await db.SaveChangesAsync();
         }
 
+        /// <summary>
+        /// Aktörün görmesine izin verilen prim sonuçları. Bölge/yayın/kullanıcı kapsamı çağıranın verdiği
+        /// filtrelerden değil, aktörün veritabanındaki güncel rol ve bölgesinden türetilir (ResultAccess):
+        /// BM kendi bölgesi, ST kendi satırı, pasif/bilinmeyen aktör hiçbir şey görmez. regionId /
+        /// specificUserId yalnız Admin ve Yönetici için daraltma olarak uygulanır.
+        /// </summary>
         public async Task<List<CalcSummary>> GetResultsAsync(
+            int actorUserId, int year, string quarter, int? regionId = null,
+            bool publishedOnly = false, int? specificUserId = null)
+        {
+            using var adb = _factory.CreateDbContext();
+            var actor = await adb.Users.AsNoTracking()
+                .Where(u => u.UserId == actorUserId)
+                .Select(u => new { u.RoleId, u.RegionId, u.IsActive })
+                .FirstOrDefaultAsync();
+            var scope = actor is { IsActive: true }
+                ? ResultAccess.Resolve(actor.RoleId, actorUserId, actor.RegionId, publishedOnly, regionId, specificUserId)
+                : ResultAccess.Denied;
+            return await QueryResultsAsync(year, quarter, scope.RegionId, scope.PublishedOnly, scope.UserId);
+        }
+
+        // Yetki kontrolsüz iç sorgu: yalnız servis içinden (kapsamı zaten çözülmüş çağrılar) kullanılır.
+        private async Task<List<CalcSummary>> QueryResultsAsync(
             int year, string quarter, int? regionId = null,
             bool publishedOnly = false, int? specificUserId = null)
         {

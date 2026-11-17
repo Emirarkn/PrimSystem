@@ -173,7 +173,7 @@ else
         {
             using var db = DbFactory.CreateDbContext();
             var q = db.Users.Where(u => u.RoleId == RoleId.ST && u.IsActive && !u.IsDeleted);
-            if (Session.IsBM) q = q.Where(u => u.RegionId == Session.CurrentUser!.RegionId);
+            if (Session.IsBM) { var rid = Session.ScopeRegionId; q = q.Where(u => u.RegionId == rid); }
             stList = await q.OrderBy(u => u.FullName).ToListAsync();
         }
         catch { stList = new(); }

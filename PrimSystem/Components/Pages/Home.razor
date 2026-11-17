@@ -742,9 +742,9 @@ else
         if (latestPub == null) return;
         try
         {
-            int? regionFilter = Session.IsBM ? Session.CurrentUser?.RegionId : null;
+            int? regionFilter = Session.ScopeRegionId;
             int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
-            publishedSummaries = await CalcSvc.GetResultsAsync(publishedYear, publishedQuarter, regionFilter, publishedOnly: !isDraftView, specificUserId: userFilter);
+            publishedSummaries = await CalcSvc.GetResultsAsync(Session.RequireUserId(), publishedYear, publishedQuarter, regionFilter, publishedOnly: !isDraftView, specificUserId: userFilter);
 
             // Admin: brick ataması son hesaplamadan sonra değişti mi / yayınlanmamış mı bandı.
             freshness = Session.IsAdmin ? await CalcSvc.GetCalcFreshnessAsync(publishedYear, publishedQuarter) : null;

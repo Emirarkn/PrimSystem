@@ -548,7 +548,7 @@ else
             if (!_modeInitialized) { salesOnlyMode = await CalcSvc.GetSalesOnlyModeAsync(); _modeInitialized = true; }
 
             // Tüm Türkiye (regionId=null) — yayınlanmış ST sonuçları + bölge özeti + toplamlar + sipariş.
-            var tResults = CalcSvc.GetResultsAsync(selectedYear, selectedQuarter, null, publishedOnly: true, specificUserId: null);
+            var tResults = CalcSvc.GetResultsAsync(Session.RequireUserId(), selectedYear, selectedQuarter, null, publishedOnly: true, specificUserId: null);
             var tRegions = CalcSvc.GetRegionSummaryAsync(selectedYear, selectedQuarter, null, selectedProductId);
             var tOrders = CalcSvc.GetOrderSummariesAsync(selectedYear, selectedQuarter, selectedProductId);
             var tTotals = CalcSvc.GetRegionSalesTotalsAsync(selectedYear, selectedQuarter, null, selectedProductId);

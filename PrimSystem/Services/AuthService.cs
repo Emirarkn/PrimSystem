@@ -154,11 +154,16 @@ namespace PrimSystem.Services
             return true;
         }
 
-        public async Task<int> BulkResetPasswordsAsync(int actorUserId)
+        // Yeni parolalar yalnızca bu dönüş değerinde bulunur; admin'e bir kez gösterilir, hiçbir yere kaydedilmez.
+        // Eskiden parolalar üretilip atılıyor, admin dahil herkes kilitleniyordu (COR-004). Eylemi yapan admin
+        // kapsam dışı: kendi parolasını görmeden değiştirirse sistemden dışarıda kalırdı.
+        public async Task<List<TempCredential>> BulkResetPasswordsAsync(int actorUserId)
         {
             await EnsureAdminAsync(actorUserId);
             using var db = _factory.CreateDbContext();
-            var users = await db.Users.Where(u => u.IsActive && !u.IsDeleted).ToListAsync();
+            var users = await db.Users
+                .Where(u => u.IsActive && !u.IsDeleted && u.UserId != actorUserId).ToListAsync();
+            var result = new List<TempCredential>(users.Count);
             foreach (var u in users)
             {
                 var pwd = GenerateDefaultPassword(u.FullName);
@@ -166,11 +171,13 @@ namespace PrimSystem.Services
                 u.MustChangePassword = true;
                 u.ResetToken = null;
                 u.ResetTokenExpiry = null;
+                result.Add(new TempCredential(u.UserId, u.FullName, u.Username, pwd));
             }
             await db.SaveChangesAsync();
+            // Denetim kaydına parolalar yazılmaz, yalnızca sayı.
             await _audit.LogAsync(actorUserId, "PasswordBulkReset", "User", null,
                 newValue: $"{users.Count} kullanıcının parolası sıfırlandı");
-            return users.Count;
+            return result;
         }
 
         public async Task<string> AdminResetPasswordAsync(int userId, int actorUserId)

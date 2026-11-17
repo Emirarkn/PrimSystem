@@ -433,7 +433,7 @@ else
     private List<IsoBarChart.Item> topStBars = new();
 
     // Sayfa BM-özel: kapsam daima oturumdaki BM'nin bölgesi.
-    private int? scopeRegionId => Session.CurrentUser?.RegionId;
+    private int? scopeRegionId => Session.ScopeRegionId;
 
     private string RegionName => Session.CurrentUser?.Region?.Name ?? "Bölgem";
 
@@ -463,7 +463,7 @@ else
             // BM yalnız kendi bölgesinin YAYINLANMIŞ sonuçlarını görür.
             var rid = scopeRegionId;
 
-            var tResults = CalcSvc.GetResultsAsync(selectedYear, selectedQuarter, rid, publishedOnly: true, specificUserId: null);
+            var tResults = CalcSvc.GetResultsAsync(Session.RequireUserId(), selectedYear, selectedQuarter, rid, publishedOnly: true, specificUserId: null);
             var tOrders = CalcSvc.GetOrderSummariesAsync(selectedYear, selectedQuarter, selectedProductId);
             var tTotals = CalcSvc.GetRegionSalesTotalsAsync(selectedYear, selectedQuarter, rid, selectedProductId);
             await Task.WhenAll(tResults, tOrders, tTotals);

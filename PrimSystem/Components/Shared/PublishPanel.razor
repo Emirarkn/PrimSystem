@@ -285,7 +285,7 @@
         if (p.Details != null) return;
         p.Details = new List<CalcSummary>();
         StateHasChanged();
-        p.Details = await CalcSvc.GetResultsAsync(p.Year, p.Quarter, publishedOnly: true);
+        p.Details = await CalcSvc.GetResultsAsync(Session.RequireUserId(), p.Year, p.Quarter, publishedOnly: true);
         p.Details = p.Details.OrderByDescending(s => s.Calc.FinalScore ?? s.Calc.TotalScore).ToList();
     }
 

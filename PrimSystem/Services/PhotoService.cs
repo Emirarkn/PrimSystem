@@ -93,8 +93,10 @@ namespace PrimSystem.Services
             var q = db.StPhotos.AsQueryable();
             if (reviewer.RoleId == RoleId.BM)
             {
-                // BM: yalnız kendi bölgesindeki ST'lerin fotoları.
-                q = q.Where(p => p.User!.RegionId == reviewer.RegionId);
+                // BM: yalnız kendi bölgesindeki ST'lerin fotoları. Bölgesiz BM'de null == null eşleşip
+                // bölgesiz kullanıcıların fotoları görünürdü; bu yüzden ResultScope ile eşleşmez değere çevrilir.
+                var regionId = ResultScope.RegionFilter("BM", reviewer.RegionId);
+                q = q.Where(p => p.User!.RegionId == regionId);
             }
             else if (reviewer.RoleId != RoleId.Admin)
             {
