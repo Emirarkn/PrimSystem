@@ -8,6 +8,8 @@
 @inject NavigationManager Nav
 @inject ProtectedSessionStorage SessionStorage
 @inject AuthService AuthSvc
+@inject AdminGuard Guard
+@inject AuditService Audit
 @inject Microsoft.JSInterop.IJSRuntime JS
 @rendermode InteractiveServer
 
@@ -686,6 +688,7 @@
 
     private async Task SaveUser()
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         formError = "";
         if (string.IsNullOrWhiteSpace(formName)) { formError = "Ad soyad giriniz"; return; }
@@ -696,6 +699,7 @@
         {
             var user = await db.Users.FindAsync(editUserId);
             if (user == null) return;
+            var oldInfo = $"{user.FullName} · rol {user.RoleId} · bölge {user.RegionId?.ToString() ?? "-"}";
 
             // İsim değiştiyse username da güncelle
             if (user.FullName != formName.Trim())
@@ -710,6 +714,10 @@
             user.BirthDate = formBirthDate;
             user.MinMonths = formMinMonths;
             await db.SaveChangesAsync();
+            // Rol/bölge değişimi kimin neyi görebileceğini belirler: kimin yaptığı kayıt altında olmalı.
+            await Audit.LogAsync(Session.RequireUserId(), "UpdateUser", "User", user.UserId,
+                oldValue: oldInfo,
+                newValue: $"{user.FullName} · rol {user.RoleId} · bölge {user.RegionId?.ToString() ?? "-"}");
             message = $"{formName} güncellendi · Kullanıcı adı: {user.Username}";
         }
         else
@@ -735,6 +743,8 @@
             };
             db.Users.Add(user);
             await db.SaveChangesAsync();
+            await Audit.LogAsync(Session.RequireUserId(), "CreateUser", "User", user.UserId,
+                newValue: $"{user.FullName} · rol {user.RoleId} · bölge {user.RegionId?.ToString() ?? "-"}");
             message = $"{formName} eklendi · Kullanıcı adı: {username} · Şifre: {defaultPwd}";
         }
 
@@ -746,6 +756,7 @@
 
     private async Task ResetPassword()
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         var user = await db.Users.FindAsync(editUserId);
         if (user == null) return;
@@ -753,6 +764,7 @@
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(defaultPwd);
         user.MustChangePassword = true;
         await db.SaveChangesAsync();
+        await Audit.LogAsync(Session.RequireUserId(), "PasswordAdminReset", "User", user.UserId);
         message = $"Şifre sıfırlandı: {defaultPwd}";
         _ = ClearMessage();
     }
@@ -772,6 +784,7 @@
 
     private async Task ConfirmDeactivate(User u)
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         var tracked = await db.Users.FindAsync(u.UserId);
         if (tracked == null) return;
@@ -780,6 +793,7 @@
         tracked.DeactivatedAt = DateTime.UtcNow;
         tracked.DeactivatedBy = Session.CurrentUser?.UserId;
         await db.SaveChangesAsync();
+        await Audit.LogAsync(Session.RequireUserId(), "DeactivateUser", "User", u.UserId, oldValue: u.FullName);
         confirmDeleteUserId = null;
         message = $"{u.FullName} deaktif edildi";
         await LoadData();
@@ -821,6 +835,7 @@
 
     private async Task ReactivateUser(User u)
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         var tracked = await db.Users.FindAsync(u.UserId);
         if (tracked == null) return;
@@ -829,9 +844,17 @@
         tracked.DeactivatedAt = null;
         tracked.DeactivatedBy = null;
         await db.SaveChangesAsync();
+        await Audit.LogAsync(Session.RequireUserId(), "ReactivateUser", "User", u.UserId, newValue: u.FullName);
         message = $"{u.FullName} tekrar aktif edildi";
         await LoadData();
         _ = ClearMessage();
+    }
+
+    // Yetki oturumdaki kopyaya değil, veritabanındaki güncel role bakar (AdminGuard).
+    private async Task<bool> AuthorizeAsync()
+    {
+        try { await Guard.EnsureAdminAsync(Session.RequireUserId()); return true; }
+        catch (UnauthorizedAccessException) { message = "Bu işlem için yetkiniz yok."; _ = ClearMessage(); return false; }
     }
 
     private int _msgVersion;

@@ -9,6 +9,7 @@
 @inject ProtectedSessionStorage SessionStorage
 @inject CalculationService CalcSvc
 @inject AuditService Audit
+@inject AdminGuard Guard
 @rendermode InteractiveServer
 
 @if (!Session.IsLoggedIn)
@@ -784,6 +785,7 @@
 
     private async Task SaveEdit()
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         var product = await db.Products.FindAsync(editingId);
         if (product == null) return;
@@ -931,6 +933,7 @@
     // bu yüzden onay metninde toplam ağırlık etkisi gösteriliyor.
     private async Task ConfirmDeleteProduct(Product p)
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         var tracked = await db.Products.FindAsync(p.ProductId);
         if (tracked == null) return;
@@ -954,6 +957,7 @@
 
     private async Task AddProduct()
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         addError = "";
         if (string.IsNullOrWhiteSpace(newName)) { addError = "Ürün adı giriniz"; return; }
@@ -992,6 +996,9 @@
             await db.SaveChangesAsync();
         }
 
+        await Audit.LogAsync(Session.RequireUserId(), "AddProduct", "Product", product.ProductId,
+            newValue: $"{newName} ({newGroup}, ağırlık {newWeight}, prim: {(product.IsPrimEligible ? "evet" : "hayır")})");
+
         showAddDialog = false;
         message = $"{newName} eklendi";
         await LoadData();
@@ -1008,6 +1015,7 @@
 
     private async Task SaveKpi()
     {
+        if (!await AuthorizeAsync()) return;
         using var db = DbFactory.CreateDbContext();
         if (editingKpi == null) return;
 
@@ -1068,6 +1076,14 @@
         message = $"{viewYear} · {name} güncellendi — hesaplamaya yansıması için ⚡ Aktifle butonunu kullanın.";
         await LoadData();
         _ = ClearMessage();
+    }
+
+    // Yetki oturumdaki kopyaya değil, veritabanındaki güncel role bakar (AdminGuard). Yetkisi alınmış
+    // bir admin açık sekmeden ağırlık/KPI yazamasın (rapor: P1 "SaveKpi doğrudan yazıyor").
+    private async Task<bool> AuthorizeAsync()
+    {
+        try { await Guard.EnsureAdminAsync(Session.RequireUserId()); return true; }
+        catch (UnauthorizedAccessException) { message = "Bu işlem için yetkiniz yok."; _ = ClearMessage(); return false; }
     }
 
     private int _msgVersion;

@@ -663,7 +663,7 @@
             // ST yalnız kendi satırını görür (başka ST'lerin verisi sızdırılmaz).
             int? userFilter = Session.IsST ? Session.CurrentUser?.UserId : null;
             bool po = !Session.CanViewAll || publishedOnly;
-            var task1 = CalcSvc.GetResultsAsync(selectedYear, selectedQuarter, regionFilter, po, specificUserId: userFilter);
+            var task1 = CalcSvc.GetResultsAsync(Session.RequireUserId(), selectedYear, selectedQuarter, regionFilter, po, specificUserId: userFilter);
             var task2 = CalcSvc.GetOrderSummariesAsync(selectedYear, selectedQuarter, selectedProductId);
             await Task.WhenAll(task1, task2);
             summaries = task1.Result;

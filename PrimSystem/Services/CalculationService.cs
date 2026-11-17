@@ -1025,7 +1025,7 @@ namespace PrimSystem.Services
         public async Task<List<RegionAnalyticsRow>> GetRegionAnalyticsAsync(int year, string quarter)
         {
             using var db = _factory.CreateDbContext();
-            var summaries = await GetResultsAsync(year, quarter);
+            var summaries = await QueryResultsAsync(year, quarter);
             return summaries
                 .Where(s => s.Calc.User?.Region != null)
                 .GroupBy(s => s.Calc.User!.Region!.Name)
@@ -1235,7 +1235,29 @@ namespace PrimSystem.Services
             await db.SaveChangesAsync();
         }
 
+        /// <summary>
+        /// Aktörün görmesine izin verilen prim sonuçları. Bölge/yayın/kullanıcı kapsamı çağıranın verdiği
+        /// filtrelerden değil, aktörün veritabanındaki güncel rol ve bölgesinden türetilir (ResultAccess):
+        /// BM kendi bölgesi, ST kendi satırı, pasif/bilinmeyen aktör hiçbir şey görmez. regionId /
+        /// specificUserId yalnız Admin ve Yönetici için daraltma olarak uygulanır.
+        /// </summary>
         public async Task<List<CalcSummary>> GetResultsAsync(
+            int actorUserId, int year, string quarter, int? regionId = null,
+            bool publishedOnly = false, int? specificUserId = null)
+        {
+            using var adb = _factory.CreateDbContext();
+            var actor = await adb.Users.AsNoTracking()
+                .Where(u => u.UserId == actorUserId)
+                .Select(u => new { u.RoleId, u.RegionId, u.IsActive })
+                .FirstOrDefaultAsync();
+            var scope = actor is { IsActive: true }
+                ? ResultAccess.Resolve(actor.RoleId, actorUserId, actor.RegionId, publishedOnly, regionId, specificUserId)
+                : ResultAccess.Denied;
+            return await QueryResultsAsync(year, quarter, scope.RegionId, scope.PublishedOnly, scope.UserId);
+        }
+
+        // Yetki kontrolsüz iç sorgu: yalnız servis içinden (kapsamı zaten çözülmüş çağrılar) kullanılır.
+        private async Task<List<CalcSummary>> QueryResultsAsync(
             int year, string quarter, int? regionId = null,
             bool publishedOnly = false, int? specificUserId = null)
         {

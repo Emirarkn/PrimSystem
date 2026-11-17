@@ -41,6 +41,7 @@ builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<AdminGuard>();
 builder.Services.AddScoped<PhotoService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<SessionState>();
