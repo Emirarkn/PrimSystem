@@ -454,7 +454,7 @@ select[style*="border-radius:7px"] { font-size: 13px !important; padding: 8px 12
    Çubuk tek satır ~920 px gerektiriyordu; 360 px'te her sayfada yatay kaydırma çıkıyordu.
    Dar ekranda logo + sağ blok üstte, sekmeler altta satır kırarak sığar. Satır içi stiller
    var olduğu için !important gerekir. */
-@media (max-width: 960px) {
+@media (max-width: 1200px) {
     .prim-topbar { flex-wrap: wrap !important; height: auto !important; padding: 8px 12px !important; row-gap: 6px; }
     /* Sol blok kabuğu kalkar: logo, sağ blok ve sekmeler çubuğun doğrudan öğesi olur. */
     .prim-topbar__left { display: contents !important; }
@@ -462,10 +462,11 @@ select[style*="border-radius:7px"] { font-size: 13px !important; padding: 8px 12
     .prim-topbar__left > div[style*="width:1px"] { display: none !important; }
     .prim-topbar__right { order: 2; margin-left: auto; }
     .prim-nav { order: 3; flex: 1 1 100%; flex-wrap: wrap; height: auto !important; gap: 4px !important; }
-    .prim-nav button { padding: 7px 10px !important; font-size: 12px !important; }
+    .prim-nav button { padding: 7px 10px !important; font-size: 12px !important; white-space: nowrap; }
 }
+/* Sekmeler tek satırda ~800 px, sağ blok ~330 px: 1380 px altında kullanıcı adı gizlenir. */
+@media (max-width: 1380px) { .prim-user { display: none !important; } }
 @media (max-width: 560px) {
-    .prim-user { display: none !important; }
     /* Çok dar ekranda sekmeler yalnız simge (metin DOM'da kalır, ekran okuyucu ve title ipucu çalışır). */
     .prim-nav button { font-size: 0 !important; gap: 0 !important; padding: 9px 11px !important; }
     .prim-nav button > span[style*="font-size:9px"] { font-size: 9px !important; margin-left: 3px !important; }
@@ -486,3 +487,5 @@ select[style*="border-radius:7px"] { font-size: 13px !important; padding: 8px 12
     /* Filtre/eylem satırları sığmayınca alt satıra geçer. */
     div[style*="display:flex"][style*="gap:"]:not(.prim-nav):not(.prim-topbar) { flex-wrap: wrap; }
 }
+
+.prim-nav button { white-space: nowrap; }
