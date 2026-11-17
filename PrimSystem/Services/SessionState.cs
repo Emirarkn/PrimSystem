@@ -58,6 +58,9 @@ namespace PrimSystem.Services
 
         public async Task LogoutAsync(ProtectedSessionStorage storage)
         {
+            // Taklit sırasında CurrentUser hedef kullanıcıdır: önce admin'e dönülmezse hedefin oturum satırı
+            // kapanır, admin'in satırı açık kalır ve impersonator_id/userId depoda yaşamaya devam ederdi (COR-011).
+            if (IsImpersonating) await StopImpersonatingAsync(storage);
             await CloseSessionAsync();
             if (_token != null) _store.Remove(_token);
             _token = null;
@@ -82,7 +85,13 @@ namespace PrimSystem.Services
                 _token = tokenResult.Value;
 
                 // Fast path: already in Singleton store (server hasn't restarted)
-                if (_store.Get(_token) != null) { RestoreAttempted = true; OnChange?.Invoke(); return; }
+                if (_store.Get(_token) != null)
+                {
+                    // Taklit sürerken sayfa yenilenirse hedef kullanıcı depoda kalır ama impersonator bilgisi
+                    // okunmadan dönülüyordu: banner kayboluyor, admin hedef kullanıcıya hapsoluyordu (COR-011).
+                    await RestoreImpersonatorAsync(storage);
+                    RestoreAttempted = true; OnChange?.Invoke(); return;
+                }
 
                 // Slow path: server restarted → restore from DB via persisted userId
                 var idResult = await storage.GetAsync<int>("userId");
@@ -96,9 +105,7 @@ namespace PrimSystem.Services
                     }
                 }
 
-                var impResult = await storage.GetAsync<int>("impersonator_id");
-                if (impResult.Success && impResult.Value > 0)
-                    ImpersonatorId = impResult.Value;
+                await RestoreImpersonatorAsync(storage);
 
                 RestoreAttempted = true;
             }
@@ -107,6 +114,34 @@ namespace PrimSystem.Services
                 /* JS interop henüz hazır değil (ilk SSR render) — RestoreAttempted false kalır,
                    böylece interaktif circuit'te OnAfterRenderAsync tekrar dener. */
             }
+        }
+
+        /// <summary>
+        /// Taklit eden yöneticinin geçerli olup olmadığı: hâlâ aktif, silinmemiş bir Admin olmalı.
+        /// (Rolü düşürülmüş/pasifleştirilmiş bir adminin açık taklit oturumu geri yüklenmez.)
+        /// </summary>
+        public static bool CanRestoreImpersonator(User? admin) =>
+            admin != null && !admin.IsDeleted && AdminGuard.IsAdmin(admin.RoleId, admin.IsActive);
+
+        private async Task RestoreImpersonatorAsync(ProtectedSessionStorage storage)
+        {
+            var impResult = await storage.GetAsync<int>("impersonator_id");
+            if (!impResult.Success || impResult.Value <= 0) return;
+
+            var admin = await _auth.GetUserByIdAsync(impResult.Value);
+            if (CanRestoreImpersonator(admin))
+            {
+                ImpersonatorId = impResult.Value;
+                return;
+            }
+
+            // Taklit eden artık yetkili değil: hedef kullanıcı olarak devam etmek yetki genişletmesi olur,
+            // oturumu tamamen kapat.
+            if (_token != null) _store.Remove(_token);
+            _token = null;
+            await storage.DeleteAsync("session_token");
+            await storage.DeleteAsync("userId");
+            await storage.DeleteAsync("impersonator_id");
         }
 
         /// <summary>
