@@ -7,6 +7,19 @@ A **quarterly bonus calculation, performance scoring and field analytics** platf
 - **Code size:** ~22,400 lines (app ~21,100 + tests ~1,270), 47 Razor components, 12 services, 40 entities
 - **Language:** UI and code comments are in Turkish
 
+## Screenshots
+
+> The names below are **fictional placeholders**. The figures come from a local development database; no real employee data is published in this repository.
+
+| | |
+|---|---|
+| ![Sign-in page](docs/screenshots/login.jpg) | ![Dashboard with star badges, KPI rings and the top-10 ranking](docs/screenshots/dashboard.jpg) |
+| **Sign-in** | **Dashboard**: star badges, pass / fail rings, top-10 ranking |
+| ![Reports page with summary cards and the regional summary table](docs/screenshots/reports.jpg) | ![Organization management with region cards and active sessions](docs/screenshots/organization.jpg) |
+| **Reports**: period filters, summary cards, regional summary | **Organization**: regions, BM / ST rows, active sessions |
+| ![Order leaderboard dialog](docs/screenshots/leaderboard.jpg) | |
+| **Order leaderboard** | |
+
 ---
 
 ## 1. What does it do?
