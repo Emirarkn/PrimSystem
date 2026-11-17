@@ -449,3 +449,40 @@ button[style*="border-radius:7px"][style*="font-weight:600"], label[style*="bord
     border-radius: 10px !important;
 }
 select[style*="border-radius:7px"] { font-size: 13px !important; padding: 8px 12px !important; border-radius: 10px !important; }
+
+/* ── Üst çubuk: dar ekran ────────────────────────────────────────
+   Çubuk tek satır ~920 px gerektiriyordu; 360 px'te her sayfada yatay kaydırma çıkıyordu.
+   Dar ekranda logo + sağ blok üstte, sekmeler altta satır kırarak sığar. Satır içi stiller
+   var olduğu için !important gerekir. */
+@media (max-width: 960px) {
+    .prim-topbar { flex-wrap: wrap !important; height: auto !important; padding: 8px 12px !important; row-gap: 6px; }
+    /* Sol blok kabuğu kalkar: logo, sağ blok ve sekmeler çubuğun doğrudan öğesi olur. */
+    .prim-topbar__left { display: contents !important; }
+    .prim-topbar__left > div:first-child { order: 1; }
+    .prim-topbar__left > div[style*="width:1px"] { display: none !important; }
+    .prim-topbar__right { order: 2; margin-left: auto; }
+    .prim-nav { order: 3; flex: 1 1 100%; flex-wrap: wrap; height: auto !important; gap: 4px !important; }
+    .prim-nav button { padding: 7px 10px !important; font-size: 12px !important; }
+}
+@media (max-width: 560px) {
+    .prim-user { display: none !important; }
+    /* Çok dar ekranda sekmeler yalnız simge (metin DOM'da kalır, ekran okuyucu ve title ipucu çalışır). */
+    .prim-nav button { font-size: 0 !important; gap: 0 !important; padding: 9px 11px !important; }
+    .prim-nav button > span[style*="font-size:9px"] { font-size: 9px !important; margin-left: 3px !important; }
+}
+
+/* ── Dar ekran: taşma koruması ──────────────────────────────────
+   Satır içi stilli sayfalarda genişliği sabit öğeler tüm sayfayı yatay kaydırıyordu. */
+@media (max-width: 760px) {
+    table { display: block; max-width: 100%; overflow-x: auto; }
+    select, input:not([type="checkbox"]):not([type="radio"]), textarea { max-width: 100%; box-sizing: border-box; }
+    .p-title { font-size: 20px; }
+    .p-card { padding: 16px; }
+    /* Satır içi 3-6 sütunlu kart ızgaraları 2 sütuna iner; yan yana 4 kart 360 px'e sığmıyordu. */
+    [style*="grid-template-columns:repeat(3,1fr)"], [style*="grid-template-columns:repeat(4,1fr)"],
+    [style*="grid-template-columns:repeat(5,1fr)"], [style*="grid-template-columns:repeat(6,1fr)"],
+    [style*="grid-template-columns:1fr 1fr 1fr"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    [style*="grid-template-columns:repeat(12,1fr)"] { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    /* Filtre/eylem satırları sığmayınca alt satıra geçer. */
+    div[style*="display:flex"][style*="gap:"]:not(.prim-nav):not(.prim-topbar) { flex-wrap: wrap; }
+}
